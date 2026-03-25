@@ -5,12 +5,12 @@ import { useState } from "react"
 import dynamic from "next/dynamic"
 import { ImageUpload } from "@/components/image-upload"
 import { ProgressSteps } from "@/components/progress-steps"
-import { useMeshy } from "@/hooks/use-meshy-api"
+import { useMeshy } from "@/hooks/use-meshy"
 import { Button } from "@/components/ui/button"
 import { Sparkles, RotateCcw, Zap, Package, Play } from "lucide-react"
 
 const ModelViewer = dynamic(
-  () => import("@/components/model-viewer-3d").then((mod) => mod.ModelViewer),
+  () => import("@/components/model-viewer").then((mod) => mod.ModelViewer),
   { 
     ssr: false,
     loading: () => (
