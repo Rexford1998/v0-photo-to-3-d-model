@@ -51,6 +51,15 @@ interface UseMeshyResult {
   reset: () => void
 }
 
+// Convert external URLs to proxied URLs to avoid CORS issues
+function getProxiedUrl(url: string): string {
+  // If already a proxied URL or local URL, return as-is
+  if (url.startsWith("/api/proxy-model") || url.startsWith("/")) {
+    return url
+  }
+  return `/api/proxy-model?url=${encodeURIComponent(url)}`
+}
+
 export function useMeshy(): UseMeshyResult {
   const [stage, setStage] = useState<GenerationStage>("idle")
   const [currentStep, setCurrentStep] = useState(0)
@@ -170,7 +179,7 @@ export function useMeshy(): UseMeshyResult {
       }
 
       const generatedModelUrl = task.model_urls.glb
-      setModelUrl(generatedModelUrl)
+      setModelUrl(getProxiedUrl(generatedModelUrl))
 
       // Step 2: Start rigging to get walking animation
       setStage("rigging")
@@ -199,10 +208,10 @@ export function useMeshy(): UseMeshyResult {
 
       // Set the walking animation URL if available
       if (riggingTask.result?.basic_animations?.walking_glb_url) {
-        setAnimationUrl(riggingTask.result.basic_animations.walking_glb_url)
+        setAnimationUrl(getProxiedUrl(riggingTask.result.basic_animations.walking_glb_url))
       } else if (riggingTask.result?.rigged_character_glb_url) {
         // Use rigged character if no walking animation
-        setAnimationUrl(riggingTask.result.rigged_character_glb_url)
+        setAnimationUrl(getProxiedUrl(riggingTask.result.rigged_character_glb_url))
       }
 
       setStage("complete")
