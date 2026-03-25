@@ -164,12 +164,13 @@ export function useMeshy(): UseMeshyResult {
         signal,
       })
 
+      const createData = await createResponse.json()
+      
       if (!createResponse.ok) {
-        const errorData = await createResponse.json()
-        throw new Error(errorData.error || "Failed to start generation")
+        throw new Error(createData.error || "Failed to start generation")
       }
 
-      const { taskId } = await createResponse.json()
+      const { taskId } = createData
 
       // Poll for Image to 3D completion
       const task = await pollTask(taskId, signal)
