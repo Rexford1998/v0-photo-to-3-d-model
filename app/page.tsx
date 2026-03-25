@@ -8,7 +8,6 @@ import { useMeshy } from "@/hooks/use-meshy"
 import { Button } from "@/components/ui/button"
 import { Sparkles, RotateCcw, Zap, Box, PersonStanding } from "lucide-react"
 
-// Dynamic import for ModelViewer to avoid SSR issues with Three.js
 const ModelViewer = dynamic(
   () => import("@/components/model-viewer").then((mod) => mod.ModelViewer),
   { 
@@ -63,7 +62,6 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-background">
-      {/* Hero Header */}
       <header className="relative overflow-hidden border-b border-border bg-card">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-accent/10 via-transparent to-transparent" />
         <div className="relative mx-auto max-w-6xl px-4 py-12 sm:py-16">
@@ -82,11 +80,9 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Main Content */}
       <div className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
         {!showModel ? (
           <div className="mx-auto max-w-2xl space-y-8">
-            {/* Upload Section */}
             <div className="space-y-4">
               <ImageUpload
                 onImageSelect={handleImageSelect}
@@ -126,7 +122,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Progress Steps */}
             {isProcessing && (
               <div className="rounded-2xl border border-border bg-card p-6">
                 <ProgressSteps
@@ -138,7 +133,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* Error State */}
             {stage === "error" && (
               <div className="rounded-2xl border border-destructive/30 bg-destructive/10 p-6 text-center">
                 <p className="mb-4 text-destructive">{error}</p>
@@ -149,7 +143,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* Features */}
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="rounded-xl bg-card p-4 text-center border border-border">
                 <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-secondary">
@@ -181,7 +174,6 @@ export default function Home() {
             </div>
           </div>
         ) : (
-          /* Model Viewer */
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <div>
@@ -212,7 +204,6 @@ export default function Home() {
         )}
       </div>
 
-      {/* Footer */}
       <footer className="border-t border-border bg-card py-6">
         <div className="mx-auto max-w-6xl px-4 text-center text-sm text-muted-foreground">
           <p>
