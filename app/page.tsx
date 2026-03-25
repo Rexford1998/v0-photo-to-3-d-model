@@ -6,7 +6,7 @@ import { ImageUpload } from "@/components/image-upload"
 import { ProgressSteps } from "@/components/progress-steps"
 import { useMeshy } from "@/hooks/use-meshy"
 import { Button } from "@/components/ui/button"
-import { Sparkles, RotateCcw, Zap, Cube, Footprints } from "lucide-react"
+import { Sparkles, RotateCcw, Zap, Box, PersonStanding } from "lucide-react"
 
 // Dynamic import for ModelViewer to avoid SSR issues with Three.js
 const ModelViewer = dynamic(
@@ -153,7 +153,7 @@ export default function Home() {
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="rounded-xl bg-card p-4 text-center border border-border">
                 <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-secondary">
-                  <Cube className="h-6 w-6 text-foreground" />
+                  <Box className="h-6 w-6 text-foreground" />
                 </div>
                 <h3 className="font-medium text-foreground">3D Generation</h3>
                 <p className="text-sm text-muted-foreground">
@@ -162,7 +162,7 @@ export default function Home() {
               </div>
               <div className="rounded-xl bg-card p-4 text-center border border-border">
                 <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-secondary">
-                  <Footprints className="h-6 w-6 text-foreground" />
+                  <PersonStanding className="h-6 w-6 text-foreground" />
                 </div>
                 <h3 className="font-medium text-foreground">Auto Animation</h3>
                 <p className="text-sm text-muted-foreground">
@@ -204,7 +204,7 @@ export default function Home() {
 
             {animationUrl && (
               <div className="flex items-center justify-center gap-2 rounded-xl bg-accent/10 p-3 text-sm text-accent">
-                <Footprints className="h-4 w-4" />
+                <PersonStanding className="h-4 w-4" />
                 Walking animation active
               </div>
             )}
