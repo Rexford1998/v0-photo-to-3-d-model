@@ -1,5 +1,6 @@
 "use client"
 
+// Meshy API Hook - Build: 2026-03-25-v4
 import { useState, useCallback, useRef } from "react"
 
 interface MeshyTask {

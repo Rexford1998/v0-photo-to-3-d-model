@@ -1,5 +1,6 @@
 "use client"
 
+// Model Viewer 3D Component - Build: 2026-03-25-v4
 import { useRef, useEffect, Suspense, useState, useCallback, Component, ReactNode } from "react"
 import { Canvas, useFrame } from "@react-three/fiber"
 import { OrbitControls, useGLTF, Environment, Html, ContactShadows, useAnimations } from "@react-three/drei"

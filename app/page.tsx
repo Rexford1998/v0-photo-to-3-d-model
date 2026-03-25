@@ -1,10 +1,11 @@
 "use client"
 
+// Main Page - Build: 2026-03-25-v4
 import { useState } from "react"
 import dynamic from "next/dynamic"
 import { ImageUpload } from "@/components/image-upload"
 import { ProgressSteps } from "@/components/progress-steps"
-import { useMeshy } from "@/hooks/use-meshy"
+import { useMeshy } from "@/hooks/use-meshy-api"
 import { Button } from "@/components/ui/button"
 import { Sparkles, RotateCcw, Zap, Package, Play } from "lucide-react"
 
