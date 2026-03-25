@@ -1,5 +1,6 @@
 "use client"
 
+// Model viewer component for displaying 3D GLB models with animations
 import { useRef, useEffect, Suspense, useState, useCallback, Component, ReactNode, useMemo } from "react"
 import { Canvas, useFrame } from "@react-three/fiber"
 import { OrbitControls, useGLTF, Environment, Html, ContactShadows, useAnimations } from "@react-three/drei"
@@ -8,16 +9,12 @@ import * as THREE from "three"
 // Helper to ensure URLs are proxied to avoid CORS issues
 function getProxiedUrl(url: string): string {
   if (!url) return url
-  console.log("[v0] getProxiedUrl input:", url)
   // If already proxied or local, return as-is
   if (url.startsWith("/api/proxy-model") || url.startsWith("/") || url.startsWith("blob:")) {
-    console.log("[v0] URL already proxied or local, returning as-is")
     return url
   }
   // Proxy external URLs
-  const proxied = `/api/proxy-model?url=${encodeURIComponent(url)}`
-  console.log("[v0] Proxying external URL to:", proxied)
-  return proxied
+  return `/api/proxy-model?url=${encodeURIComponent(url)}`
 }
 
 // Error boundary for catching Three.js/useGLTF errors
@@ -58,12 +55,6 @@ interface AnimatedModelProps {
 
 function AnimatedModel({ url }: AnimatedModelProps) {
   const group = useRef<THREE.Group>(null)
-  
-  // Log the URL being loaded
-  useEffect(() => {
-    console.log("[v0] AnimatedModel loading from URL:", url)
-  }, [url])
-  
   const { scene, animations } = useGLTF(url)
   const { actions, mixer } = useAnimations(animations, group)
 
@@ -100,13 +91,13 @@ function AnimatedModel({ url }: AnimatedModelProps) {
               if (mat instanceof THREE.Material) {
                 mat.side = THREE.FrontSide
                 
-                // For materials with maps (textures), ensure they're visible
+                // For materials with maps (textures), ensure they use sRGB color space
                 if ('map' in mat && mat.map) {
-                  mat.map.encoding = THREE.sRGBEncoding
+                  mat.map.colorSpace = THREE.SRGBColorSpace
                   mat.needsUpdate = true
                 }
                 
-                // Standard material: reduce roughness to make textures more visible
+                // Standard material: adjust for better texture visibility
                 if (mat instanceof THREE.MeshStandardMaterial) {
                   mat.metalness = Math.min(mat.metalness || 0.3, 0.5)
                   mat.roughness = Math.max(mat.roughness || 0.8, 0.4)
@@ -125,7 +116,7 @@ function AnimatedModel({ url }: AnimatedModelProps) {
             mat.side = THREE.FrontSide
             
             if ('map' in mat && mat.map) {
-              mat.map.encoding = THREE.sRGBEncoding
+              mat.map.colorSpace = THREE.SRGBColorSpace
               mat.needsUpdate = true
             }
             
@@ -182,11 +173,7 @@ interface ModelViewerProps {
 
 export function ModelViewer({ modelUrl, animationUrl }: ModelViewerProps) {
   // Ensure URLs are proxied to avoid CORS issues with cached/external URLs
-  const displayUrl = useMemo(() => {
-    const proxied = getProxiedUrl(animationUrl || modelUrl)
-    console.log("[v0] ModelViewer displayUrl:", proxied)
-    return proxied
-  }, [animationUrl, modelUrl])
+  const displayUrl = useMemo(() => getProxiedUrl(animationUrl || modelUrl), [animationUrl, modelUrl])
   const [error, setError] = useState<Error | null>(null)
   const [retryKey, setRetryKey] = useState(0)
 
