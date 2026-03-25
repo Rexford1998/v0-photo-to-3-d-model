@@ -1,9 +1,20 @@
 "use client"
 
-import { useRef, useEffect, Suspense, useState, useCallback, Component, ReactNode } from "react"
+import { useRef, useEffect, Suspense, useState, useCallback, Component, ReactNode, useMemo } from "react"
 import { Canvas, useFrame } from "@react-three/fiber"
 import { OrbitControls, useGLTF, Environment, Html, ContactShadows, useAnimations } from "@react-three/drei"
 import * as THREE from "three"
+
+// Helper to ensure URLs are proxied to avoid CORS issues
+function getProxiedUrl(url: string): string {
+  if (!url) return url
+  // If already proxied or local, return as-is
+  if (url.startsWith("/api/proxy-model") || url.startsWith("/") || url.startsWith("blob:")) {
+    return url
+  }
+  // Proxy external URLs
+  return `/api/proxy-model?url=${encodeURIComponent(url)}`
+}
 
 // Error boundary for catching Three.js/useGLTF errors
 class ModelErrorBoundary extends Component<
@@ -125,7 +136,8 @@ interface ModelViewerProps {
 }
 
 export function ModelViewer({ modelUrl, animationUrl }: ModelViewerProps) {
-  const displayUrl = animationUrl || modelUrl
+  // Ensure URLs are proxied to avoid CORS issues with cached/external URLs
+  const displayUrl = useMemo(() => getProxiedUrl(animationUrl || modelUrl), [animationUrl, modelUrl])
   const [error, setError] = useState<Error | null>(null)
   const [retryKey, setRetryKey] = useState(0)
 

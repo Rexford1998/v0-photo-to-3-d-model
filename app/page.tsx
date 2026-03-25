@@ -6,7 +6,7 @@ import { ImageUpload } from "@/components/image-upload"
 import { ProgressSteps } from "@/components/progress-steps"
 import { useMeshy } from "@/hooks/use-meshy"
 import { Button } from "@/components/ui/button"
-import { Sparkles, RotateCcw, Zap, Package, Play } from "lucide-react"
+import { Sparkles, RotateCcw, Zap, Package, Play, Gamepad2 } from "lucide-react"
 
 const ModelViewer = dynamic(
   () => import("@/components/model-viewer").then((mod) => mod.ModelViewer),
@@ -23,6 +23,21 @@ const ModelViewer = dynamic(
   }
 )
 
+const CoffeeShopGame = dynamic(
+  () => import("@/components/coffee-shop-game").then((mod) => mod.CoffeeShopGame),
+  { 
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
+          <p className="text-sm text-muted-foreground">Loading coffee shop...</p>
+        </div>
+      </div>
+    ),
+  }
+)
+
 const STEPS = [
   { id: "generate", label: "Generate 3D", description: "Creating model" },
   { id: "rig", label: "Add Animation", description: "Rigging character" },
@@ -31,6 +46,7 @@ const STEPS = [
 
 export default function Home() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [gameMode, setGameMode] = useState(false)
   const {
     stage,
     currentStep,
@@ -54,6 +70,7 @@ export default function Home() {
 
   const handleReset = () => {
     setSelectedImage(null)
+    setGameMode(false)
     reset()
   }
 
@@ -177,27 +194,46 @@ export default function Home() {
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-2xl font-bold text-foreground">Your 3D Character</h2>
+                <h2 className="text-2xl font-bold text-foreground">
+                  {gameMode ? "Coffee Shop Explorer" : "Your 3D Character"}
+                </h2>
                 <p className="text-muted-foreground">
-                  {animationUrl 
-                    ? "Your character is now walking! Interact with the 3D view below."
-                    : "Your 3D model is ready. Drag to rotate, scroll to zoom."}
+                  {gameMode 
+                    ? "Use WASD or Arrow Keys to walk around the coffee shop!"
+                    : animationUrl 
+                      ? "Your character is ready! Enter the coffee shop to explore."
+                      : "Your 3D model is ready. Drag to rotate, scroll to zoom."}
                 </p>
               </div>
-              <Button onClick={handleReset} variant="outline">
-                <RotateCcw className="mr-2 h-4 w-4" />
-                Create Another
-              </Button>
+              <div className="flex gap-2">
+                {animationUrl && (
+                  <Button 
+                    onClick={() => setGameMode(!gameMode)} 
+                    variant={gameMode ? "default" : "outline"}
+                  >
+                    <Gamepad2 className="mr-2 h-4 w-4" />
+                    {gameMode ? "Exit Game" : "Enter Coffee Shop"}
+                  </Button>
+                )}
+                <Button onClick={handleReset} variant="outline">
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Create Another
+                </Button>
+              </div>
             </div>
 
-            <div className="aspect-[4/3] overflow-hidden rounded-2xl border border-border shadow-xl">
-              <ModelViewer modelUrl={modelUrl} animationUrl={animationUrl || undefined} />
+            <div className={gameMode ? "h-[600px] overflow-hidden rounded-2xl border border-border shadow-xl" : "aspect-[4/3] overflow-hidden rounded-2xl border border-border shadow-xl"}>
+              {gameMode ? (
+                <CoffeeShopGame modelUrl={modelUrl} animationUrl={animationUrl || undefined} />
+              ) : (
+                <ModelViewer modelUrl={modelUrl} animationUrl={animationUrl || undefined} />
+              )}
             </div>
 
-            {animationUrl && (
+            {animationUrl && !gameMode && (
               <div className="flex items-center justify-center gap-2 rounded-xl bg-accent/10 p-3 text-sm text-accent">
-                <Play className="h-4 w-4" />
-                Walking animation active
+                <Gamepad2 className="h-4 w-4" />
+                Click &quot;Enter Coffee Shop&quot; to walk around with your character!
               </div>
             )}
           </div>
