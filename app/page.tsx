@@ -51,14 +51,9 @@ export default function Home() {
     reset,
   } = useMeshy()
 
-  const handleImageSelect = async (file: File) => {
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      const base64 = e.target?.result as string
-      setSelectedImage(base64)
-      generateModel(file)
-    }
-    reader.readAsDataURL(file)
+  const handleImageSelect = (file: File) => {
+    setSelectedImage(URL.createObjectURL(file))
+    generateModel(file)
   }
 
   const handleReset = () => {
@@ -91,7 +86,12 @@ export default function Home() {
 
         {!selectedImage ? (
           <div className="mb-12">
-            <ImageUpload onImageSelect={handleImageSelect} loading={loading} />
+            <ImageUpload 
+              onImageSelect={handleImageSelect} 
+              onGenerate={handleGenerateAnimation}
+              loading={loading}
+              showGenerateButton={true}
+            />
           </div>
         ) : (
           <div className="space-y-6">

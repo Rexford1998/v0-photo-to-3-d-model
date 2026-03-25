@@ -2,32 +2,36 @@
 
 import { useCallback, useState } from "react"
 import { useDropzone } from "react-dropzone"
-import { Upload, Image as ImageIcon, X } from "lucide-react"
+import { Upload, Image as ImageIcon, X, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
 import Image from "next/image"
 
 interface ImageUploadProps {
-  onImageSelect: (dataUrl: string) => void
+  onImageSelect: (file: File) => void
+  onGenerate: () => void
   disabled?: boolean
+  showGenerateButton?: boolean
 }
 
-export function ImageUpload({ onImageSelect, disabled }: ImageUploadProps) {
+export function ImageUpload({ onImageSelect, onGenerate, disabled, showGenerateButton }: ImageUploadProps) {
   const [preview, setPreview] = useState<string | null>(null)
+  const [file, setFile] = useState<File | null>(null)
 
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
-      const file = acceptedFiles[0]
-      if (file) {
+      const f = acceptedFiles[0]
+      if (f) {
+        setFile(f)
         const reader = new FileReader()
         reader.onload = () => {
           const result = reader.result as string
           setPreview(result)
-          onImageSelect(result)
         }
-        reader.readAsDataURL(file)
+        reader.readAsDataURL(f)
       }
     },
-    [onImageSelect]
+    []
   )
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -80,6 +84,18 @@ export function ImageUpload({ onImageSelect, disabled }: ImageUploadProps) {
           <p className="mt-3 text-center text-sm text-muted-foreground">
             Click or drop to replace
           </p>
+          {showGenerateButton && file && (
+            <div className="mt-6 flex justify-center">
+              <Button 
+                onClick={() => onImageSelect(file)}
+                disabled={disabled}
+                className="gap-2"
+              >
+                <Sparkles className="h-4 w-4" />
+                Generate 3D Model
+              </Button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="flex flex-col items-center gap-4 p-8 text-center">
