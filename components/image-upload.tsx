@@ -49,74 +49,86 @@ export function ImageUpload({ onImageSelect, onGenerate, disabled, showGenerateB
     setPreview(null)
   }
 
-  return (
-    <div
-      {...getRootProps()}
-      className={cn(
-        "relative flex min-h-[280px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed transition-all duration-300",
-        isDragActive
-          ? "border-accent bg-accent/10 scale-[1.02]"
-          : "border-border bg-card hover:border-accent/50 hover:bg-secondary/50",
-        disabled && "cursor-not-allowed opacity-50",
-        preview && "border-solid border-accent/30"
-      )}
-    >
-      <input {...getInputProps()} />
+  const handleGenerate = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (file) {
+      onImageSelect(file)
+    }
+  }
 
-      {preview ? (
-        <div className="relative h-full w-full p-4">
-          <div className="relative h-64 w-full overflow-hidden rounded-xl">
-            <Image
-              src={preview}
-              alt="Preview"
-              fill
-              className="object-contain"
-            />
-          </div>
-          {!disabled && (
-            <button
-              onClick={clearImage}
-              className="absolute right-6 top-6 rounded-full bg-background/90 p-2 text-muted-foreground shadow-lg transition-colors hover:bg-destructive hover:text-destructive-foreground"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-          <p className="mt-3 text-center text-sm text-muted-foreground">
-            Click or drop to replace
-          </p>
-          {showGenerateButton && file && (
-            <div className="mt-6 flex justify-center">
-              <Button 
-                onClick={() => onImageSelect(file)}
-                disabled={disabled}
-                className="gap-2"
-              >
-                <Sparkles className="h-4 w-4" />
-                Generate 3D Model
-              </Button>
+  return (
+    <div className="space-y-4">
+      <div
+        {...getRootProps()}
+        className={cn(
+          "relative flex min-h-[280px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed transition-all duration-300",
+          isDragActive
+            ? "border-accent bg-accent/10 scale-[1.02]"
+            : "border-border bg-card hover:border-accent/50 hover:bg-secondary/50",
+          disabled && "cursor-not-allowed opacity-50",
+          preview && "border-solid border-accent/30"
+        )}
+      >
+        <input {...getInputProps()} />
+
+        {preview ? (
+          <div className="relative h-full w-full p-4">
+            <div className="relative h-64 w-full overflow-hidden rounded-xl">
+              <Image
+                src={preview}
+                alt="Preview"
+                fill
+                className="object-contain"
+              />
             </div>
-          )}
-        </div>
-      ) : (
-        <div className="flex flex-col items-center gap-4 p-8 text-center">
-          <div className={cn(
-            "rounded-2xl p-4 transition-all duration-300",
-            isDragActive ? "bg-accent/20" : "bg-secondary"
-          )}>
-            {isDragActive ? (
-              <ImageIcon className="h-10 w-10 text-accent" />
-            ) : (
-              <Upload className="h-10 w-10 text-muted-foreground" />
+            {!disabled && (
+              <button
+                onClick={clearImage}
+                className="absolute right-6 top-6 rounded-full bg-background/90 p-2 text-muted-foreground shadow-lg transition-colors hover:bg-destructive hover:text-destructive-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
             )}
-          </div>
-          <div className="space-y-1">
-            <p className="font-medium text-foreground">
-              {isDragActive ? "Drop your image here" : "Upload a character image"}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              JPG or PNG, humanoid characters work best
+            <p className="mt-3 text-center text-sm text-muted-foreground">
+              Click or drop to replace
             </p>
           </div>
+        ) : (
+          <div className="flex flex-col items-center gap-4 p-8 text-center">
+            <div className={cn(
+              "rounded-2xl p-4 transition-all duration-300",
+              isDragActive ? "bg-accent/20" : "bg-secondary"
+            )}>
+              {isDragActive ? (
+                <ImageIcon className="h-10 w-10 text-accent" />
+              ) : (
+                <Upload className="h-10 w-10 text-muted-foreground" />
+              )}
+            </div>
+            <div className="space-y-1">
+              <p className="font-medium text-foreground">
+                {isDragActive ? "Drop your image here" : "Upload a character image"}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                JPG or PNG, humanoid characters work best
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Generate button below the upload area */}
+      {showGenerateButton && file && (
+        <div className="flex justify-center">
+          <Button 
+            onClick={handleGenerate}
+            disabled={disabled}
+            size="lg"
+            className="gap-2"
+          >
+            <Sparkles className="h-5 w-5" />
+            Generate 3D Model
+          </Button>
         </div>
       )}
     </div>

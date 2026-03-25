@@ -1,5 +1,6 @@
 "use client"
 
+// Coffee shop game environment - v2
 import { useRef, useEffect, Suspense, useState, useCallback, Component, ReactNode, useMemo } from "react"
 import { Canvas, useFrame } from "@react-three/fiber"
 import { useGLTF, Environment, Html, useAnimations, useKeyboardControls, KeyboardControls } from "@react-three/drei"

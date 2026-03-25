@@ -1,26 +1,22 @@
 "use client"
 
+// Model viewer for displaying 3D GLB models with animations - v2
 import React, { useRef, useEffect, Suspense, useState, useMemo } from "react"
 import { Canvas, useFrame } from "@react-three/fiber"
 import { OrbitControls, useGLTF, Environment, Html, ContactShadows, useAnimations } from "@react-three/drei"
 import { Group, Mesh, Material, MeshStandardMaterial, Box3, Vector3, FrontSide } from "three"
 
-interface AnimatedModelProps {
-  url: string
-}
-
-interface ModelViewerProps {
-  modelUrl: string
-  animationUrl?: string
-}
-
-// Helper to proxy external URLs to avoid CORS
+// Helper to ensure URLs are proxied to avoid CORS issues
 function getProxiedUrl(url: string): string {
   if (!url) return url
   if (url.startsWith("/api/proxy-model") || url.startsWith("/") || url.startsWith("blob:")) {
     return url
   }
   return `/api/proxy-model?url=${encodeURIComponent(url)}`
+}
+
+interface AnimatedModelProps {
+  url: string
 }
 
 function AnimatedModel({ url }: AnimatedModelProps) {
@@ -98,31 +94,29 @@ function LoadingFallback() {
   )
 }
 
-function ErrorFallback({ message }: { message: string }) {
-  return (
-    <div className="flex h-full w-full items-center justify-center bg-secondary/30 rounded-2xl">
-      <div className="flex flex-col items-center gap-4 p-8 text-center">
-        <div className="rounded-full bg-destructive/10 p-4">
-          <svg className="h-8 w-8 text-destructive" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-        </div>
-        <div>
-          <h3 className="font-medium text-foreground">Failed to load 3D model</h3>
-          <p className="text-sm text-muted-foreground mt-1">{message}</p>
-        </div>
-      </div>
-    </div>
-  )
+interface ModelViewerProps {
+  modelUrl: string
+  animationUrl?: string
 }
 
 export function ModelViewer({ modelUrl, animationUrl }: ModelViewerProps) {
-  const [error, setError] = useState<string | null>(null)
-  const displayUrl = animationUrl || modelUrl
-  const proxiedUrl = useMemo(() => getProxiedUrl(displayUrl), [displayUrl])
+  const displayUrl = useMemo(() => getProxiedUrl(animationUrl || modelUrl), [animationUrl, modelUrl])
+  const [hasError, setHasError] = useState(false)
 
-  if (error) {
-    return <ErrorFallback message={error} />
+  if (hasError) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-secondary/30 rounded-2xl">
+        <div className="flex flex-col items-center gap-4 p-8 text-center">
+          <p className="text-sm text-muted-foreground">Failed to load model</p>
+          <button
+            onClick={() => setHasError(false)}
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -132,25 +126,34 @@ export function ModelViewer({ modelUrl, animationUrl }: ModelViewerProps) {
         shadows
         dpr={[1, 2]}
         gl={{ antialias: true, alpha: true }}
-        onError={() => setError("Failed to initialize 3D renderer")}
+        onError={() => setHasError(true)}
       >
         <ambientLight intensity={1} />
         <directionalLight 
           position={[10, 15, 10]} 
           intensity={1.5} 
           castShadow 
-          shadow-mapSize={[2048, 2048]}
         />
         <directionalLight position={[-10, 10, 5]} intensity={0.6} />
-        <directionalLight position={[0, 5, -10]} intensity={0.5} />
         
         <Suspense fallback={<LoadingFallback />}>
-          <AnimatedModel url={proxiedUrl} />
-          <ContactShadows position={[0, 0, 0]} opacity={0.6} scale={15} blur={2.5} far={5} />
+          <AnimatedModel url={displayUrl} />
+          <ContactShadows
+            position={[0, 0, 0]}
+            opacity={0.6}
+            scale={15}
+            blur={2.5}
+            far={5}
+          />
         </Suspense>
         
         <Environment preset="studio" />
-        <OrbitControls enablePan={false} minDistance={2} maxDistance={10} target={[0, 1, 0]} />
+        <OrbitControls
+          enablePan={false}
+          minDistance={2}
+          maxDistance={10}
+          target={[0, 1, 0]}
+        />
       </Canvas>
 
       <div className="absolute bottom-4 left-4 rounded-lg bg-background/80 px-3 py-2 text-xs text-muted-foreground backdrop-blur-sm">
