@@ -8,12 +8,16 @@ import * as THREE from "three"
 // Helper to ensure URLs are proxied to avoid CORS issues
 function getProxiedUrl(url: string): string {
   if (!url) return url
+  console.log("[v0] getProxiedUrl input:", url)
   // If already proxied or local, return as-is
   if (url.startsWith("/api/proxy-model") || url.startsWith("/") || url.startsWith("blob:")) {
+    console.log("[v0] URL already proxied or local, returning as-is")
     return url
   }
   // Proxy external URLs
-  return `/api/proxy-model?url=${encodeURIComponent(url)}`
+  const proxied = `/api/proxy-model?url=${encodeURIComponent(url)}`
+  console.log("[v0] Proxying external URL to:", proxied)
+  return proxied
 }
 
 // Error boundary for catching Three.js/useGLTF errors
@@ -54,6 +58,12 @@ interface AnimatedModelProps {
 
 function AnimatedModel({ url }: AnimatedModelProps) {
   const group = useRef<THREE.Group>(null)
+  
+  // Log the URL being loaded
+  useEffect(() => {
+    console.log("[v0] AnimatedModel loading from URL:", url)
+  }, [url])
+  
   const { scene, animations } = useGLTF(url)
   const { actions, mixer } = useAnimations(animations, group)
 
@@ -78,21 +88,56 @@ function AnimatedModel({ url }: AnimatedModelProps) {
 
   useEffect(() => {
     if (scene) {
-      // Traverse the scene to enhance materials for better texture display
+      // Enable texture rendering by properly configuring all materials
       scene.traverse((node) => {
         if (node instanceof THREE.Mesh) {
-          // Enhance material properties to show textures better
-          if (node.material instanceof THREE.Material) {
-            node.material.side = THREE.FrontSide
+          // Ensure mesh can cast and receive shadows
+          node.castShadow = true
+          node.receiveShadow = true
+          
+          if (Array.isArray(node.material)) {
+            node.material.forEach((mat) => {
+              if (mat instanceof THREE.Material) {
+                mat.side = THREE.FrontSide
+                
+                // For materials with maps (textures), ensure they're visible
+                if ('map' in mat && mat.map) {
+                  mat.map.encoding = THREE.sRGBEncoding
+                  mat.needsUpdate = true
+                }
+                
+                // Standard material: reduce roughness to make textures more visible
+                if (mat instanceof THREE.MeshStandardMaterial) {
+                  mat.metalness = Math.min(mat.metalness || 0.3, 0.5)
+                  mat.roughness = Math.max(mat.roughness || 0.8, 0.4)
+                  mat.envMapIntensity = 1.5
+                }
+                
+                // Phong material: boost specular for better texture visibility
+                if (mat instanceof THREE.MeshPhongMaterial) {
+                  mat.shininess = Math.max(mat.shininess || 30, 60)
+                  mat.specular = new THREE.Color(0x444444)
+                }
+              }
+            })
+          } else if (node.material instanceof THREE.Material) {
+            const mat = node.material
+            mat.side = THREE.FrontSide
             
-            // Enable shadows on materials
-            node.castShadow = true
-            node.receiveShadow = true
+            if ('map' in mat && mat.map) {
+              mat.map.encoding = THREE.sRGBEncoding
+              mat.needsUpdate = true
+            }
             
-            // For standard materials, boost metalness and roughness handling
-            if ('metalness' in node.material && 'roughness' in node.material) {
-              const mat = node.material as THREE.MeshStandardMaterial
-              mat.envMapIntensity = 1.2
+            if (mat instanceof THREE.MeshStandardMaterial) {
+              mat.metalness = Math.min(mat.metalness || 0.3, 0.5)
+              mat.roughness = Math.max(mat.roughness || 0.8, 0.4)
+              mat.envMapIntensity = 1.5
+            }
+            
+            if (mat instanceof THREE.MeshPhongMaterial) {
+              mat.shininess = Math.max(mat.shininess || 30, 60)
+              mat.specular = new THREE.Color(0x444444)
             }
           }
         }
@@ -137,7 +182,11 @@ interface ModelViewerProps {
 
 export function ModelViewer({ modelUrl, animationUrl }: ModelViewerProps) {
   // Ensure URLs are proxied to avoid CORS issues with cached/external URLs
-  const displayUrl = useMemo(() => getProxiedUrl(animationUrl || modelUrl), [animationUrl, modelUrl])
+  const displayUrl = useMemo(() => {
+    const proxied = getProxiedUrl(animationUrl || modelUrl)
+    console.log("[v0] ModelViewer displayUrl:", proxied)
+    return proxied
+  }, [animationUrl, modelUrl])
   const [error, setError] = useState<Error | null>(null)
   const [retryKey, setRetryKey] = useState(0)
 
@@ -189,36 +238,53 @@ export function ModelViewer({ modelUrl, animationUrl }: ModelViewerProps) {
           key={retryKey}
           camera={{ position: [0, 1.5, 4], fov: 45 }}
           shadows
-          gl={{ antialias: true, alpha: true, toneMappingExposure: 0.8 }}
+          dpr={[1, 2]}
+          gl={{ 
+            antialias: true, 
+            alpha: true,
+            toneMappingExposure: 1.0,
+            toneMappingWhitePoint: 1.0,
+          }}
         >
-          <ambientLight intensity={0.7} />
+          {/* Ambient light - soft overall illumination */}
+          <ambientLight intensity={1} />
+          
+          {/* Main directional light */}
           <directionalLight 
-            position={[8, 12, 6]} 
-            intensity={1.2} 
+            position={[10, 15, 10]} 
+            intensity={1.5} 
             castShadow 
             shadow-mapSize={[2048, 2048]}
-            shadow-bias={-0.001}
-            shadow-camera-left={-10}
-            shadow-camera-right={10}
-            shadow-camera-top={10}
-            shadow-camera-bottom={-10}
-            shadow-camera-far={50}
+            shadow-bias={-0.0001}
+            shadow-camera-left={-15}
+            shadow-camera-right={15}
+            shadow-camera-top={15}
+            shadow-camera-bottom={-15}
+            shadow-camera-far={100}
           />
-          <pointLight position={[-6, 8, -6]} intensity={0.6} />
-          <pointLight position={[6, 6, -8]} intensity={0.4} />
+          
+          {/* Fill lights to reduce harsh shadows */}
+          <directionalLight 
+            position={[-10, 10, 5]} 
+            intensity={0.6}
+          />
+          <directionalLight 
+            position={[0, 5, -10]} 
+            intensity={0.5}
+          />
           
           <Suspense fallback={<LoadingFallback />}>
             <AnimatedModel url={displayUrl} />
             <ContactShadows
               position={[0, 0, 0]}
-              opacity={0.5}
-              scale={12}
+              opacity={0.6}
+              scale={15}
               blur={2.5}
-              far={4}
+              far={5}
             />
           </Suspense>
           
-          <Environment preset="studio" intensity={1} />
+          <Environment preset="studio" intensity={1.2} />
           <OrbitControls
             enablePan={false}
             minDistance={2}
