@@ -1,5 +1,6 @@
 "use client"
 
+// Image upload component with drag and drop - Force rebuild v3
 import { useCallback, useState } from "react"
 import { useDropzone } from "react-dropzone"
 import { Upload, Image as ImageIcon, X } from "lucide-react"

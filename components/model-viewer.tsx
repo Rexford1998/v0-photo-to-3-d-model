@@ -1,10 +1,19 @@
 "use client"
 
-// 3D Model Viewer Component with Texture Support - v2
+// 3D Model Viewer with texture support - Force rebuild v3
 import { useRef, useEffect, Suspense, useState, useCallback, Component, ReactNode } from "react"
 import { Canvas, useFrame, useThree } from "@react-three/fiber"
 import { OrbitControls, useGLTF, Environment, Html, ContactShadows, useAnimations } from "@react-three/drei"
-import { Group, Mesh, Material, MeshStandardMaterial, Box3, Vector3, Texture, CanvasTexture, SRGBColorSpace } from "three"
+import { Group, Mesh, Material, MeshStandardMaterial, Box3, Vector3, CanvasTexture, SRGBColorSpace, FrontSide, Texture } from "three"
+
+// Helper to ensure URLs are proxied to avoid CORS issues
+function getProxiedUrl(url: string): string {
+  if (!url) return url
+  if (url.startsWith("/api/proxy-model") || url.startsWith("/") || url.startsWith("blob:") || url.startsWith("data:")) {
+    return url
+  }
+  return `/api/proxy-model?url=${encodeURIComponent(url)}`
+}
 
 // Error boundary for catching Three.js/useGLTF errors
 class ModelErrorBoundary extends Component<
@@ -48,44 +57,35 @@ function AnimatedModel({ url, textureUrl }: AnimatedModelProps) {
   const { scene, animations } = useGLTF(url)
   const { actions, mixer } = useAnimations(animations, group)
   const textureRef = useRef<Texture | null>(null)
-  const { gl } = useThree()
 
-  // Load and apply texture from image
+  // Load and apply texture from uploaded image
   useEffect(() => {
-    if (!textureUrl) return
+    if (!textureUrl || !scene) return
 
-    const loadTexture = async () => {
-      try {
-        const img = new Image()
-        img.crossOrigin = "anonymous"
-        img.onload = () => {
-          const canvas = document.createElement('canvas')
-          const ctx = canvas.getContext('2d')
-          if (!ctx) return
+    const img = new Image()
+    img.crossOrigin = "anonymous"
+    img.onload = () => {
+      const canvas = document.createElement("canvas")
+      const ctx = canvas.getContext("2d")
+      if (!ctx) return
 
-          canvas.width = img.width
-          canvas.height = img.height
-          ctx.drawImage(img, 0, 0)
+      canvas.width = img.width
+      canvas.height = img.height
+      ctx.drawImage(img, 0, 0)
 
-          const canvasTexture = new CanvasTexture(canvas)
-          canvasTexture.colorSpace = SRGBColorSpace
-          textureRef.current = canvasTexture
+      const canvasTexture = new CanvasTexture(canvas)
+      canvasTexture.colorSpace = SRGBColorSpace
+      textureRef.current = canvasTexture
 
-          // Apply texture to all meshes
-          scene.traverse((node) => {
-            if (node instanceof Mesh && node.material instanceof MeshStandardMaterial) {
-              node.material.map = canvasTexture
-              node.material.needsUpdate = true
-            }
-          })
+      // Apply texture to all meshes
+      scene.traverse((node) => {
+        if (node instanceof Mesh && node.material instanceof MeshStandardMaterial) {
+          node.material.map = canvasTexture
+          node.material.needsUpdate = true
         }
-        img.src = textureUrl
-      } catch (err) {
-        console.error("Failed to load texture:", err)
-      }
+      })
     }
-
-    loadTexture()
+    img.src = textureUrl
   }, [textureUrl, scene])
 
   useEffect(() => {
@@ -95,7 +95,6 @@ function AnimatedModel({ url, textureUrl }: AnimatedModelProps) {
         firstAction.reset().fadeIn(0.5).play()
       }
     }
-
     return () => {
       mixer?.stopAllAction()
     }
@@ -113,22 +112,22 @@ function AnimatedModel({ url, textureUrl }: AnimatedModelProps) {
         if (node instanceof Mesh) {
           node.castShadow = true
           node.receiveShadow = true
-          
           if (node.material instanceof Material) {
+            node.material.side = FrontSide
             if (node.material instanceof MeshStandardMaterial) {
               node.material.envMapIntensity = 1.2
             }
           }
         }
       })
-      
+
       // Auto-scale and center the model
       const box = new Box3().setFromObject(scene)
       const center = box.getCenter(new Vector3())
       const size = box.getSize(new Vector3())
       const maxDim = Math.max(size.x, size.y, size.z)
       const scale = 2.5 / maxDim
-      
+
       scene.scale.setScalar(scale)
       scene.position.x = -center.x * scale
       scene.position.y = -box.min.y * scale
@@ -161,7 +160,7 @@ interface ModelViewerProps {
 }
 
 export function ModelViewer({ modelUrl, animationUrl, textureUrl }: ModelViewerProps) {
-  const displayUrl = animationUrl || modelUrl
+  const displayUrl = getProxiedUrl(animationUrl || modelUrl)
   const [error, setError] = useState<Error | null>(null)
   const [retryKey, setRetryKey] = useState(0)
 
@@ -171,7 +170,7 @@ export function ModelViewer({ modelUrl, animationUrl, textureUrl }: ModelViewerP
 
   const handleRetry = () => {
     setError(null)
-    setRetryKey(prev => prev + 1)
+    setRetryKey((prev) => prev + 1)
     useGLTF.clear(displayUrl)
   }
 
@@ -212,47 +211,31 @@ export function ModelViewer({ modelUrl, animationUrl, textureUrl }: ModelViewerP
           key={retryKey}
           camera={{ position: [0, 1.5, 4], fov: 45 }}
           shadows
-          gl={{ antialias: true, alpha: true, toneMappingExposure: 0.8 }}
+          gl={{ antialias: true, alpha: true }}
         >
           <ambientLight intensity={0.7} />
-          <directionalLight 
-            position={[8, 12, 6]} 
-            intensity={1.2} 
-            castShadow 
+          <directionalLight
+            position={[8, 12, 6]}
+            intensity={1.2}
+            castShadow
             shadow-mapSize={[2048, 2048]}
             shadow-bias={-0.001}
-            shadow-camera-left={-10}
-            shadow-camera-right={10}
-            shadow-camera-top={10}
-            shadow-camera-bottom={-10}
-            shadow-camera-far={50}
           />
           <pointLight position={[-6, 8, -6]} intensity={0.6} />
           <pointLight position={[6, 6, -8]} intensity={0.4} />
-          
+
           <Suspense fallback={<LoadingFallback />}>
             <AnimatedModel url={displayUrl} textureUrl={textureUrl} />
-            <ContactShadows
-              position={[0, 0, 0]}
-              opacity={0.5}
-              scale={12}
-              blur={2.5}
-              far={4}
-            />
+            <ContactShadows position={[0, 0, 0]} opacity={0.5} scale={12} blur={2.5} far={4} />
           </Suspense>
-          
-          <Environment preset="studio" intensity={1} />
-          <OrbitControls
-            enablePan={false}
-            minDistance={2}
-            maxDistance={10}
-            target={[0, 1, 0]}
-          />
+
+          <Environment preset="studio" />
+          <OrbitControls enablePan={false} minDistance={2} maxDistance={10} target={[0, 1, 0]} />
         </Canvas>
       </ModelErrorBoundary>
-      
+
       <div className="absolute bottom-4 left-4 rounded-lg bg-background/80 px-3 py-2 text-xs text-muted-foreground backdrop-blur-sm">
-        Drag to rotate • Scroll to zoom
+        Drag to rotate - Scroll to zoom
       </div>
     </div>
   )
