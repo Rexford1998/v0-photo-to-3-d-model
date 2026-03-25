@@ -1,12 +1,10 @@
 "use client"
 
-// 3D Model Viewer with texture support - Force rebuild v3
 import { useRef, useEffect, Suspense, useState, useCallback, Component, ReactNode } from "react"
-import { Canvas, useFrame, useThree } from "@react-three/fiber"
+import { Canvas, useFrame } from "@react-three/fiber"
 import { OrbitControls, useGLTF, Environment, Html, ContactShadows, useAnimations } from "@react-three/drei"
 import { Group, Mesh, Material, MeshStandardMaterial, Box3, Vector3, CanvasTexture, SRGBColorSpace, FrontSide, Texture } from "three"
 
-// Helper to ensure URLs are proxied to avoid CORS issues
 function getProxiedUrl(url: string): string {
   if (!url) return url
   if (url.startsWith("/api/proxy-model") || url.startsWith("/") || url.startsWith("blob:") || url.startsWith("data:")) {
@@ -15,7 +13,6 @@ function getProxiedUrl(url: string): string {
   return `/api/proxy-model?url=${encodeURIComponent(url)}`
 }
 
-// Error boundary for catching Three.js/useGLTF errors
 class ModelErrorBoundary extends Component<
   { children: ReactNode; onError: (error: Error) => void; resetKey: number },
   { hasError: boolean }
@@ -58,7 +55,6 @@ function AnimatedModel({ url, textureUrl }: AnimatedModelProps) {
   const { actions, mixer } = useAnimations(animations, group)
   const textureRef = useRef<Texture | null>(null)
 
-  // Load and apply texture from uploaded image
   useEffect(() => {
     if (!textureUrl || !scene) return
 
@@ -77,7 +73,6 @@ function AnimatedModel({ url, textureUrl }: AnimatedModelProps) {
       canvasTexture.colorSpace = SRGBColorSpace
       textureRef.current = canvasTexture
 
-      // Apply texture to all meshes
       scene.traverse((node) => {
         if (node instanceof Mesh && node.material instanceof MeshStandardMaterial) {
           node.material.map = canvasTexture
@@ -121,7 +116,6 @@ function AnimatedModel({ url, textureUrl }: AnimatedModelProps) {
         }
       })
 
-      // Auto-scale and center the model
       const box = new Box3().setFromObject(scene)
       const center = box.getCenter(new Vector3())
       const size = box.getSize(new Vector3())

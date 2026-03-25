@@ -15,7 +15,6 @@ export async function POST(request: NextRequest) {
     const imageUrl = body.imageUrl
 
     if (!imageUrl || typeof imageUrl !== "string") {
-      console.log("[v0] Invalid imageUrl - type:", typeof imageUrl)
       return NextResponse.json(
         { error: "Image URL must be a valid string" },
         { status: 400 }
@@ -24,14 +23,11 @@ export async function POST(request: NextRequest) {
 
     // Ensure the image URL is a valid data URL or http URL
     if (!imageUrl.startsWith("data:image/") && !imageUrl.startsWith("http")) {
-      console.log("[v0] Invalid imageUrl format:", imageUrl.substring(0, 50))
       return NextResponse.json(
         { error: "Image URL must be a data URL or HTTP URL" },
         { status: 400 }
       )
     }
-
-    console.log("[v0] Sending to Meshy - imageUrl type:", typeof imageUrl, "starts with:", imageUrl.substring(0, 30))
 
     // Create Image to 3D task
     const response = await fetch("https://api.meshy.ai/openapi/v1/image-to-3d", {
