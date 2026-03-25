@@ -11,17 +11,16 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json()
-    const imageUrl = body.imageUrl
+    const { imageUrl } = await request.json()
 
-    if (!imageUrl || typeof imageUrl !== "string") {
+    if (!imageUrl) {
       return NextResponse.json(
-        { error: "Image URL must be a string" },
+        { error: "Image URL is required" },
         { status: 400 }
       )
     }
 
-    // Create Image to 3D task with texturing enabled
+    // Create Image to 3D task with pose mode for better rigging
     const response = await fetch("https://api.meshy.ai/openapi/v1/image-to-3d", {
       method: "POST",
       headers: {
@@ -31,6 +30,10 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         image_url: imageUrl,
         enable_pbr: true,
+        should_remesh: true,
+        should_texture: true,
+        pose_mode: "t-pose", // T-pose is ideal for rigging
+        target_polycount: 30000,
       }),
     })
 
