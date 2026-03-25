@@ -6,7 +6,7 @@ import { ImageUpload } from "@/components/image-upload"
 import { ProgressSteps } from "@/components/progress-steps"
 import { useMeshy } from "@/hooks/use-meshy"
 import { Button } from "@/components/ui/button"
-import { Sparkles, RotateCcw, Zap, Box, PersonStanding } from "lucide-react"
+import { Sparkles, RotateCcw, Zap, Package, Play } from "lucide-react"
 
 const ModelViewer = dynamic(
   () => import("@/components/model-viewer").then((mod) => mod.ModelViewer),
@@ -74,7 +74,7 @@ export default function Home() {
               Bring Your Photos to Life
             </h1>
             <p className="max-w-2xl text-lg text-muted-foreground">
-              Upload a character image and watch it transform into an animated 3D model with walking capabilities
+              Upload a character image and watch it transform into an animated 3D model with textures and walking capabilities
             </p>
           </div>
         </div>
@@ -146,16 +146,16 @@ export default function Home() {
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="rounded-xl bg-card p-4 text-center border border-border">
                 <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-secondary">
-                  <Box className="h-6 w-6 text-foreground" />
+                  <Package className="h-6 w-6 text-foreground" />
                 </div>
                 <h3 className="font-medium text-foreground">3D Generation</h3>
                 <p className="text-sm text-muted-foreground">
-                  AI-powered image to 3D model conversion
+                  AI-powered image to 3D model with textures
                 </p>
               </div>
               <div className="rounded-xl bg-card p-4 text-center border border-border">
                 <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-secondary">
-                  <PersonStanding className="h-6 w-6 text-foreground" />
+                  <Play className="h-6 w-6 text-foreground" />
                 </div>
                 <h3 className="font-medium text-foreground">Auto Animation</h3>
                 <p className="text-sm text-muted-foreground">
@@ -168,7 +168,7 @@ export default function Home() {
                 </div>
                 <h3 className="font-medium text-foreground">Interactive View</h3>
                 <p className="text-sm text-muted-foreground">
-                  Rotate and zoom your 3D character
+                  Rotate and zoom with textured details
                 </p>
               </div>
             </div>
@@ -196,7 +196,7 @@ export default function Home() {
 
             {animationUrl && (
               <div className="flex items-center justify-center gap-2 rounded-xl bg-accent/10 p-3 text-sm text-accent">
-                <PersonStanding className="h-4 w-4" />
+                <Play className="h-4 w-4" />
                 Walking animation active
               </div>
             )}
@@ -207,7 +207,7 @@ export default function Home() {
       <footer className="border-t border-border bg-card py-6">
         <div className="mx-auto max-w-6xl px-4 text-center text-sm text-muted-foreground">
           <p>
-            3D models generated using Meshy AI. Works best with humanoid characters.
+            3D models generated using Meshy AI. Note: Rigging requires Meshy API credits. Visit meshy.ai to add funds.
           </p>
         </div>
       </footer>

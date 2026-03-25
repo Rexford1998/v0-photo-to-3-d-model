@@ -67,11 +67,32 @@ function AnimatedModel({ url }: AnimatedModelProps) {
 
   useEffect(() => {
     if (scene) {
+      // Traverse the scene to enhance materials for better texture display
+      scene.traverse((node) => {
+        if (node instanceof THREE.Mesh) {
+          // Enhance material properties to show textures better
+          if (node.material instanceof THREE.Material) {
+            node.material.side = THREE.FrontSide
+            
+            // Enable shadows on materials
+            node.castShadow = true
+            node.receiveShadow = true
+            
+            // For standard materials, boost metalness and roughness handling
+            if ('metalness' in node.material && 'roughness' in node.material) {
+              const mat = node.material as THREE.MeshStandardMaterial
+              mat.envMapIntensity = 1.2
+            }
+          }
+        }
+      })
+      
+      // Auto-scale and center the model
       const box = new THREE.Box3().setFromObject(scene)
       const center = box.getCenter(new THREE.Vector3())
       const size = box.getSize(new THREE.Vector3())
       const maxDim = Math.max(size.x, size.y, size.z)
-      const scale = 2 / maxDim
+      const scale = 2.5 / maxDim
       
       scene.scale.setScalar(scale)
       scene.position.x = -center.x * scale
@@ -156,34 +177,36 @@ export function ModelViewer({ modelUrl, animationUrl }: ModelViewerProps) {
           key={retryKey}
           camera={{ position: [0, 1.5, 4], fov: 45 }}
           shadows
-          gl={{ antialias: true, alpha: true }}
+          gl={{ antialias: true, alpha: true, toneMappingExposure: 0.8 }}
         >
-          <ambientLight intensity={0.5} />
+          <ambientLight intensity={0.7} />
           <directionalLight 
-            position={[5, 10, 5]} 
-            intensity={1} 
+            position={[8, 12, 6]} 
+            intensity={1.2} 
             castShadow 
-            shadow-mapSize={[1024, 1024]}
+            shadow-mapSize={[2048, 2048]}
+            shadow-bias={-0.001}
+            shadow-camera-left={-10}
+            shadow-camera-right={10}
+            shadow-camera-top={10}
+            shadow-camera-bottom={-10}
+            shadow-camera-far={50}
           />
-          <spotLight
-            position={[-5, 10, -5]}
-            intensity={0.5}
-            angle={0.3}
-            penumbra={1}
-          />
+          <pointLight position={[-6, 8, -6]} intensity={0.6} />
+          <pointLight position={[6, 6, -8]} intensity={0.4} />
           
           <Suspense fallback={<LoadingFallback />}>
             <AnimatedModel url={displayUrl} />
             <ContactShadows
               position={[0, 0, 0]}
-              opacity={0.4}
-              scale={10}
-              blur={2}
+              opacity={0.5}
+              scale={12}
+              blur={2.5}
               far={4}
             />
           </Suspense>
           
-          <Environment preset="studio" />
+          <Environment preset="studio" intensity={1} />
           <OrbitControls
             enablePan={false}
             minDistance={2}
