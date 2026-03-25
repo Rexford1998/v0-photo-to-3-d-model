@@ -3,7 +3,7 @@
 import { useRef, useEffect, Suspense, useState, useCallback, Component, ReactNode, useMemo } from "react"
 import { Canvas, useFrame } from "@react-three/fiber"
 import { useGLTF, Environment, Html, useAnimations, useKeyboardControls, KeyboardControls } from "@react-three/drei"
-import * as THREE from "three"
+import { Group, Mesh, Material, Vector3, Box3, DoubleSide } from "three"
 
 // Helper to ensure URLs are proxied to avoid CORS issues
 function getProxiedUrl(url: string): string {
@@ -194,7 +194,7 @@ function Lamp({ position }: { position: [number, number, number] }) {
       {/* Shade */}
       <mesh position={[0, 3, 0]} castShadow>
         <coneGeometry args={[0.3, 0.4, 16, 1, true]} />
-        <meshStandardMaterial color="#d4a574" side={THREE.DoubleSide} roughness={0.8} />
+        <meshStandardMaterial color="#d4a574" side={DoubleSide} roughness={0.8} />
       </mesh>
       {/* Bulb glow */}
       <pointLight position={[0, 2.9, 0]} intensity={0.5} distance={5} color="#ffeedd" />
@@ -261,15 +261,15 @@ interface CharacterProps {
 }
 
 function Character({ modelUrl, animationUrl }: CharacterProps) {
-  const group = useRef<THREE.Group>(null)
+  const group = useRef<Group>(null)
   // Ensure URLs are proxied to avoid CORS issues
   const displayUrl = useMemo(() => getProxiedUrl(animationUrl || modelUrl), [animationUrl, modelUrl])
   const { scene, animations } = useGLTF(displayUrl)
   const { actions, mixer } = useAnimations(animations, group)
   const [, getControls] = useKeyboardControls<Controls>()
   
-  const velocity = useRef(new THREE.Vector3())
-  const direction = useRef(new THREE.Vector3())
+  const velocity = useRef(new Vector3())
+  const direction = useRef(new Vector3())
   const targetRotation = useRef(0)
   
   const SPEED = 4
@@ -279,10 +279,10 @@ function Character({ modelUrl, animationUrl }: CharacterProps) {
   const clonedScene = useMemo(() => {
     const clone = scene.clone()
     clone.traverse((node) => {
-      if (node instanceof THREE.Mesh) {
+      if (node instanceof Mesh) {
         node.castShadow = true
         node.receiveShadow = true
-        if (node.material instanceof THREE.Material) {
+        if (node.material instanceof Material) {
           node.material = node.material.clone()
         }
       }
@@ -293,13 +293,13 @@ function Character({ modelUrl, animationUrl }: CharacterProps) {
   // Scale and center the model
   useEffect(() => {
     if (clonedScene) {
-      const box = new THREE.Box3().setFromObject(clonedScene)
-      const size = box.getSize(new THREE.Vector3())
+      const box = new Box3().setFromObject(clonedScene)
+      const size = box.getSize(new Vector3())
       const maxDim = Math.max(size.x, size.y, size.z)
       const scale = 1.5 / maxDim
       clonedScene.scale.setScalar(scale)
       
-      const center = box.getCenter(new THREE.Vector3())
+      const center = box.getCenter(new Vector3())
       clonedScene.position.x = -center.x * scale
       clonedScene.position.y = -box.min.y * scale
       clonedScene.position.z = -center.z * scale
@@ -366,7 +366,7 @@ function Character({ modelUrl, animationUrl }: CharacterProps) {
     }
 
     // Camera follows character
-    const cameraTarget = new THREE.Vector3(
+    const cameraTarget = new Vector3(
       group.current.position.x,
       group.current.position.y + 2,
       group.current.position.z + 6

@@ -11,11 +11,12 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { imageUrl } = await request.json()
+    const body = await request.json()
+    const imageUrl = body.imageUrl
 
-    if (!imageUrl) {
+    if (!imageUrl || typeof imageUrl !== "string") {
       return NextResponse.json(
-        { error: "Image URL is required" },
+        { error: "Image URL must be a string" },
         { status: 400 }
       )
     }
@@ -30,7 +31,6 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         image_url: imageUrl,
         enable_pbr: true,
-        should_texture: true,
       }),
     })
 

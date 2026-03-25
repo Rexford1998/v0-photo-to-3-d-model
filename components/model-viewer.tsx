@@ -3,7 +3,7 @@
 import React, { useRef, useEffect, Suspense, useState, useMemo } from "react"
 import { Canvas, useFrame } from "@react-three/fiber"
 import { OrbitControls, useGLTF, Environment, Html, ContactShadows, useAnimations } from "@react-three/drei"
-import * as THREE from "three"
+import { Group, Mesh, Material, MeshStandardMaterial, Box3, Vector3, FrontSide } from "three"
 
 interface AnimatedModelProps {
   url: string
@@ -24,7 +24,7 @@ function getProxiedUrl(url: string): string {
 }
 
 function AnimatedModel({ url }: AnimatedModelProps) {
-  const group = useRef<THREE.Group>(null)
+  const group = useRef<Group>(null)
   const { scene, animations } = useGLTF(url)
   const { actions, mixer } = useAnimations(animations, group)
 
@@ -49,15 +49,15 @@ function AnimatedModel({ url }: AnimatedModelProps) {
   useEffect(() => {
     if (scene) {
       scene.traverse((node) => {
-        if (node instanceof THREE.Mesh) {
+        if (node instanceof Mesh) {
           node.castShadow = true
           node.receiveShadow = true
           
           const materials = Array.isArray(node.material) ? node.material : [node.material]
           materials.forEach((mat) => {
-            if (mat instanceof THREE.Material) {
-              mat.side = THREE.FrontSide
-              if (mat instanceof THREE.MeshStandardMaterial) {
+            if (mat instanceof Material) {
+              mat.side = FrontSide
+              if (mat instanceof MeshStandardMaterial) {
                 mat.metalness = 0.3
                 mat.roughness = 0.7
                 mat.envMapIntensity = 1.5
@@ -67,9 +67,9 @@ function AnimatedModel({ url }: AnimatedModelProps) {
         }
       })
       
-      const box = new THREE.Box3().setFromObject(scene)
-      const center = box.getCenter(new THREE.Vector3())
-      const size = box.getSize(new THREE.Vector3())
+      const box = new Box3().setFromObject(scene)
+      const center = box.getCenter(new Vector3())
+      const size = box.getSize(new Vector3())
       const maxDim = Math.max(size.x, size.y, size.z)
       const scale = 2.5 / maxDim
       
