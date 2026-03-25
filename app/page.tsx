@@ -89,16 +89,20 @@ export default function Home() {
             <ImageUpload 
               onImageSelect={handleImageSelect} 
               onGenerate={handleGenerateAnimation}
-              loading={loading}
+              disabled={loading}
               showGenerateButton={true}
             />
           </div>
         ) : (
           <div className="space-y-6">
             <ProgressSteps 
-              modelGenerated={!!modelUrl}
-              animationGenerated={!!animationUrl}
-              hasError={!!error}
+              steps={[
+                { id: "upload", label: "Image Uploaded" },
+                { id: "model", label: "3D Model" },
+                { id: "animation", label: "Animation" },
+              ]}
+              currentStep={animationUrl ? 3 : modelUrl ? 2 : loading ? 1 : 0}
+              error={error || undefined}
             />
 
             {error && (

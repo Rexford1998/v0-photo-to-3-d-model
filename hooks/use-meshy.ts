@@ -46,8 +46,10 @@ interface UseMeshyResult {
   progress: number
   modelUrl: string | null
   animationUrl: string | null
+  loading: boolean
   error: string | null
-  generateModel: (imageDataUrl: string) => Promise<void>
+  generateModel: (imageFile: File) => Promise<void>
+  startRigging: (modelUrl: string) => Promise<void>
   reset: () => void
 }
 
@@ -145,17 +147,28 @@ export function useMeshy(): UseMeshyResult {
     throw new Error("Rigging task timed out")
   }
 
-  const generateModel = useCallback(async (imageDataUrl: string) => {
+  const generateModel = useCallback(async (imageFile: File) => {
     reset()
     
     abortControllerRef.current = new AbortController()
     const signal = abortControllerRef.current.signal
 
     try {
-      // Step 1: Start Image to 3D generation
-      setStage("generating")
+      // Step 1: Convert File to base64 data URL
+      setStage("uploading")
       setCurrentStep(0)
       setProgress(0)
+
+      const imageDataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = reject
+        reader.readAsDataURL(imageFile)
+      })
+
+      // Step 2: Start Image to 3D generation
+      setStage("generating")
+      setProgress(10)
 
       const createResponse = await fetch("/api/meshy/image-to-3d", {
         method: "POST",
@@ -180,42 +193,10 @@ export function useMeshy(): UseMeshyResult {
 
       const generatedModelUrl = task.model_urls.glb
       setModelUrl(getProxiedUrl(generatedModelUrl))
-
-      // Step 2: Start rigging to get walking animation
-      setStage("rigging")
-      setCurrentStep(1)
-      setProgress(0)
-
-      const riggingResponse = await fetch("/api/meshy/rigging", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ modelUrl: generatedModelUrl }),
-        signal,
-      })
-
-      if (!riggingResponse.ok) {
-        // If rigging fails, still show the static model
-        console.warn("Rigging failed, showing static model")
-        setStage("complete")
-        setCurrentStep(2)
-        return
-      }
-
-      const { taskId: riggingTaskId } = await riggingResponse.json()
-
-      // Poll for rigging completion
-      const riggingTask = await pollRiggingTask(riggingTaskId, signal)
-
-      // Set the walking animation URL if available
-      if (riggingTask.result?.basic_animations?.walking_glb_url) {
-        setAnimationUrl(getProxiedUrl(riggingTask.result.basic_animations.walking_glb_url))
-      } else if (riggingTask.result?.rigged_character_glb_url) {
-        // Use rigged character if no walking animation
-        setAnimationUrl(getProxiedUrl(riggingTask.result.rigged_character_glb_url))
-      }
-
+      
+      // Model generation complete - user can now choose to add animation
       setStage("complete")
-      setCurrentStep(2)
+      setCurrentStep(1)
 
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") {
@@ -227,14 +208,61 @@ export function useMeshy(): UseMeshyResult {
     }
   }, [reset])
 
+  const startRigging = useCallback(async (modelUrlToRig: string) => {
+    if (!modelUrlToRig) return
+    
+    abortControllerRef.current = new AbortController()
+    const signal = abortControllerRef.current.signal
+
+    try {
+      setStage("rigging")
+      setCurrentStep(1)
+      setProgress(0)
+
+      const riggingResponse = await fetch("/api/meshy/rigging", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ modelUrl: modelUrlToRig }),
+        signal,
+      })
+
+      if (!riggingResponse.ok) {
+        const errorData = await riggingResponse.json()
+        throw new Error(errorData.error || "Failed to start rigging")
+      }
+
+      const { taskId: riggingTaskId } = await riggingResponse.json()
+      const riggingTask = await pollRiggingTask(riggingTaskId, signal)
+
+      if (riggingTask.result?.basic_animations?.walking_glb_url) {
+        setAnimationUrl(getProxiedUrl(riggingTask.result.basic_animations.walking_glb_url))
+      } else if (riggingTask.result?.rigged_character_glb_url) {
+        setAnimationUrl(getProxiedUrl(riggingTask.result.rigged_character_glb_url))
+      }
+
+      setStage("complete")
+      setCurrentStep(2)
+
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return
+      console.error("Rigging error:", err)
+      setError(err instanceof Error ? err.message : "Rigging failed")
+      setStage("error")
+    }
+  }, [])
+
+  const loading = stage === "uploading" || stage === "generating" || stage === "rigging"
+
   return {
     stage,
     currentStep,
     progress,
     modelUrl,
     animationUrl,
+    loading,
     error,
     generateModel,
+    startRigging,
     reset,
   }
 }
