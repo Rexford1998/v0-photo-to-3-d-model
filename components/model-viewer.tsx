@@ -1,9 +1,10 @@
 "use client"
 
+// 3D Model Viewer Component with Texture Support - v2
 import { useRef, useEffect, Suspense, useState, useCallback, Component, ReactNode } from "react"
-import { Canvas, useFrame } from "@react-three/fiber"
+import { Canvas, useFrame, useThree } from "@react-three/fiber"
 import { OrbitControls, useGLTF, Environment, Html, ContactShadows, useAnimations } from "@react-three/drei"
-import * as THREE from "three"
+import { Group, Mesh, Material, MeshStandardMaterial, Box3, Vector3, Texture, CanvasTexture, SRGBColorSpace } from "three"
 
 // Error boundary for catching Three.js/useGLTF errors
 class ModelErrorBoundary extends Component<
@@ -39,12 +40,53 @@ class ModelErrorBoundary extends Component<
 
 interface AnimatedModelProps {
   url: string
+  textureUrl?: string
 }
 
-function AnimatedModel({ url }: AnimatedModelProps) {
-  const group = useRef<THREE.Group>(null)
+function AnimatedModel({ url, textureUrl }: AnimatedModelProps) {
+  const group = useRef<Group>(null)
   const { scene, animations } = useGLTF(url)
   const { actions, mixer } = useAnimations(animations, group)
+  const textureRef = useRef<Texture | null>(null)
+  const { gl } = useThree()
+
+  // Load and apply texture from image
+  useEffect(() => {
+    if (!textureUrl) return
+
+    const loadTexture = async () => {
+      try {
+        const img = new Image()
+        img.crossOrigin = "anonymous"
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          const ctx = canvas.getContext('2d')
+          if (!ctx) return
+
+          canvas.width = img.width
+          canvas.height = img.height
+          ctx.drawImage(img, 0, 0)
+
+          const canvasTexture = new CanvasTexture(canvas)
+          canvasTexture.colorSpace = SRGBColorSpace
+          textureRef.current = canvasTexture
+
+          // Apply texture to all meshes
+          scene.traverse((node) => {
+            if (node instanceof Mesh && node.material instanceof MeshStandardMaterial) {
+              node.material.map = canvasTexture
+              node.material.needsUpdate = true
+            }
+          })
+        }
+        img.src = textureUrl
+      } catch (err) {
+        console.error("Failed to load texture:", err)
+      }
+    }
+
+    loadTexture()
+  }, [textureUrl, scene])
 
   useEffect(() => {
     if (actions && Object.keys(actions).length > 0) {
@@ -67,30 +109,23 @@ function AnimatedModel({ url }: AnimatedModelProps) {
 
   useEffect(() => {
     if (scene) {
-      // Traverse the scene to enhance materials for better texture display
       scene.traverse((node) => {
-        if (node instanceof THREE.Mesh) {
-          // Enhance material properties to show textures better
-          if (node.material instanceof THREE.Material) {
-            node.material.side = THREE.FrontSide
-            
-            // Enable shadows on materials
-            node.castShadow = true
-            node.receiveShadow = true
-            
-            // For standard materials, boost metalness and roughness handling
-            if ('metalness' in node.material && 'roughness' in node.material) {
-              const mat = node.material as THREE.MeshStandardMaterial
-              mat.envMapIntensity = 1.2
+        if (node instanceof Mesh) {
+          node.castShadow = true
+          node.receiveShadow = true
+          
+          if (node.material instanceof Material) {
+            if (node.material instanceof MeshStandardMaterial) {
+              node.material.envMapIntensity = 1.2
             }
           }
         }
       })
       
       // Auto-scale and center the model
-      const box = new THREE.Box3().setFromObject(scene)
-      const center = box.getCenter(new THREE.Vector3())
-      const size = box.getSize(new THREE.Vector3())
+      const box = new Box3().setFromObject(scene)
+      const center = box.getCenter(new Vector3())
+      const size = box.getSize(new Vector3())
       const maxDim = Math.max(size.x, size.y, size.z)
       const scale = 2.5 / maxDim
       
@@ -122,9 +157,10 @@ function LoadingFallback() {
 interface ModelViewerProps {
   modelUrl: string
   animationUrl?: string
+  textureUrl?: string
 }
 
-export function ModelViewer({ modelUrl, animationUrl }: ModelViewerProps) {
+export function ModelViewer({ modelUrl, animationUrl, textureUrl }: ModelViewerProps) {
   const displayUrl = animationUrl || modelUrl
   const [error, setError] = useState<Error | null>(null)
   const [retryKey, setRetryKey] = useState(0)
@@ -136,7 +172,6 @@ export function ModelViewer({ modelUrl, animationUrl }: ModelViewerProps) {
   const handleRetry = () => {
     setError(null)
     setRetryKey(prev => prev + 1)
-    // Clear the GLTF cache for this URL
     useGLTF.clear(displayUrl)
   }
 
@@ -196,7 +231,7 @@ export function ModelViewer({ modelUrl, animationUrl }: ModelViewerProps) {
           <pointLight position={[6, 6, -8]} intensity={0.4} />
           
           <Suspense fallback={<LoadingFallback />}>
-            <AnimatedModel url={displayUrl} />
+            <AnimatedModel url={displayUrl} textureUrl={textureUrl} />
             <ContactShadows
               position={[0, 0, 0]}
               opacity={0.5}
