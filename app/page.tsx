@@ -74,6 +74,14 @@ export default function Home() {
             <h1 className="mb-4 text-balance text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
               Bring Your Photos to Life
             </h1>
+            <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-4">
+              <a href="#meshy-generator" className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90">
+                Full Body Generator
+              </a>
+              <a href="/avatar-builder" className="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-8 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground">
+                Custom Avatar Builder
+              </a>
+            </div>
             <p className="max-w-2xl text-lg text-muted-foreground">
               Upload a character image and watch it transform into an animated 3D model with textures and walking capabilities
             </p>
