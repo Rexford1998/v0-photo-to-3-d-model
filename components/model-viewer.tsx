@@ -5,6 +5,7 @@ import { Canvas, useFrame, useGraph } from "@react-three/fiber"
 import { OrbitControls, useGLTF, Environment, Html, ContactShadows, useAnimations, KeyboardControls, useKeyboardControls } from "@react-three/drei"
 import { Group, Mesh, MeshStandardMaterial, Box3, Vector3, FrontSide, TextureLoader, SRGBColorSpace, Object3D, MathUtils } from "three"
 import { SkeletonUtils } from "three-stdlib"
+import Ecctrl from "ecctrl"
 
 function getProxiedUrl(url: string): string {
   if (!url) return url
@@ -260,7 +261,7 @@ export function ModelViewer({ modelUrl, animationUrl }: ViewerProps) {
               )}
             </Suspense>
 
-            <Environment files="https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/fish_hoek_beach_1k.hdr" background />
+            <Environment preset="sunset" background />
           </Canvas>
         </KeyboardControls>
       </ErrorBoundary>
