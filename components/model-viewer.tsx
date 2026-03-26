@@ -4,8 +4,6 @@ import { useRef, useEffect, Suspense, useState, useCallback, Component, ReactNod
 import { Canvas, useFrame, useGraph } from "@react-three/fiber"
 import { OrbitControls, useGLTF, Environment, Html, ContactShadows, useAnimations, KeyboardControls, useKeyboardControls } from "@react-three/drei"
 import { Group, Mesh, MeshStandardMaterial, Box3, Vector3, FrontSide, TextureLoader, SRGBColorSpace, Object3D, MathUtils } from "three"
-import { Physics, RigidBody } from "@react-three/rapier"
-import Ecctrl from "ecctrl"
 import { SkeletonUtils } from "three-stdlib"
 
 function getProxiedUrl(url: string): string {
@@ -252,18 +250,7 @@ export function ModelViewer({ modelUrl, animationUrl }: ViewerProps) {
 
             <Suspense fallback={<Loader />}>
               {isWalkingMode ? (
-                <Physics timeStep="vary">
-                  <Ecctrl animated={true} camInitDis={-5} camMaxDis={-7} maxVelLimit={3}>
-                    <Model url={displayUrl} originalModelUrl={originalUrl} isWalkingMode={true} />
-                  </Ecctrl>
-                  {/* Beach floor plane */}
-                  <RigidBody type="fixed" colliders="trimesh">
-                    <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]}>
-                      <planeGeometry args={[100, 100]} />
-                      <meshStandardMaterial color="#e6d4ba" />
-                    </mesh>
-                  </RigidBody>
-                </Physics>
+                <WalkingModelContent displayUrl={displayUrl} originalUrl={originalUrl} />
               ) : (
                 <>
                   <Model url={displayUrl} originalModelUrl={originalUrl} isWalkingMode={false} />
@@ -282,5 +269,46 @@ export function ModelViewer({ modelUrl, animationUrl }: ViewerProps) {
         {isWalkingMode ? "Click to focus | WASD to move | Mouse to look" : "Drag to rotate | Scroll to zoom"}
       </div>
     </div>
+  )
+}
+
+// Lazy-load walking mode to avoid chunk loading issues
+function WalkingModelContent({ displayUrl, originalUrl }: { displayUrl: string; originalUrl: string }) {
+  return (
+    <Suspense fallback={<Loader />}>
+      <WalkingModelAsync displayUrl={displayUrl} originalUrl={originalUrl} />
+    </Suspense>
+  )
+}
+
+function WalkingModelAsync({ displayUrl, originalUrl }: { displayUrl: string; originalUrl: string }) {
+  // Dynamically import Physics and Ecctrl only when needed
+  const [PhysicsModule, setPhysicsModule] = useState<any>(null)
+
+  useEffect(() => {
+    import("@react-three/rapier").then((mod) => {
+      setPhysicsModule({ Physics: mod.Physics, RigidBody: mod.RigidBody })
+    })
+  }, [])
+
+  if (!PhysicsModule) return <Loader />
+
+  const { Physics, RigidBody } = PhysicsModule
+
+  return (
+    <>
+      <Physics timeStep="vary">
+        <Ecctrl animated={true} camInitDis={-5} camMaxDis={-7} maxVelLimit={3}>
+          <Model url={displayUrl} originalModelUrl={originalUrl} isWalkingMode={true} />
+        </Ecctrl>
+        {/* Beach floor plane */}
+        <RigidBody type="fixed" colliders="trimesh">
+          <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[100, 100]} />
+            <meshStandardMaterial color="#e6d4ba" />
+          </mesh>
+        </RigidBody>
+      </Physics>
+    </>
   )
 }
