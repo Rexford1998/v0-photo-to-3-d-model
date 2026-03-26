@@ -202,17 +202,8 @@ export async function createAvatar({ userHeadUrl, morphs, body: bodySettings }: 
                 (userHeadUrl.startsWith("blob:") && userHeadUrl.includes(".glb"))
 
   if (isImage) {
-    // Create a textured head from the uploaded image
-    head = createTexturedHead()
-    
-    // Load the texture asynchronously
-    try {
-      const texture = await loadImageTexture(userHeadUrl)
-      applyTextureToHead(head, texture)
-    } catch (error) {
-      // Texture failed to load, but we still have the placeholder head
-      console.warn("Failed to load image texture, using placeholder head")
-    }
+    // Use a plain skin-toned head — no photo texture mapping
+    head = createPlaceholderHead()
   } else if (isGLB || (!userHeadUrl.startsWith("data:") && !userHeadUrl.startsWith("blob:"))) {
     // Attempt to load as GLB file
     try {

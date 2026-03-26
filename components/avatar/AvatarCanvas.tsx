@@ -3,7 +3,7 @@
 import { Canvas } from "@react-three/fiber"
 import { OrbitControls, Environment, ContactShadows } from "@react-three/drei"
 import { useEffect, useState, useRef } from "react"
-import { createAvatar, createBodyPreview, type BodySettings } from "@/lib/avatarBuilder"
+import { createAvatar, type BodySettings } from "@/lib/avatarBuilder"
 import * as THREE from "three"
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js"
 
@@ -20,29 +20,18 @@ export default function AvatarCanvas({ headUrl, morphs, bodySettings }: AvatarCa
   const sceneRef = useRef<THREE.Group>(null)
 
   useEffect(() => {
-    // If no head URL, show a body preview with placeholder head
-    if (!headUrl) {
-      try {
-        const preview = createBodyPreview(bodySettings)
-        setAvatar(preview)
-        setError(null)
-      } catch {
-        setAvatar(null)
-      }
-      return
-    }
+    if (!headUrl) return
 
     setIsLoading(true)
     setError(null)
-    
+
     createAvatar({ userHeadUrl: headUrl, morphs, body: bodySettings })
       .then((result) => {
         setAvatar(result)
         setIsLoading(false)
       })
-      .catch((err) => {
-        console.error("[v0] Failed to create avatar:", err)
-        setError("Failed to create avatar. Please try again.")
+      .catch(() => {
+        setError("Failed to build avatar. Please try again.")
         setIsLoading(false)
       })
   }, [headUrl, morphs, bodySettings])
