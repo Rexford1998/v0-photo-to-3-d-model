@@ -3,7 +3,7 @@
 import { useRef, useEffect, Suspense, useState, useCallback, Component, ReactNode } from "react"
 import { Canvas, useFrame } from "@react-three/fiber"
 import { OrbitControls, useGLTF, Environment, Html, ContactShadows, useAnimations } from "@react-three/drei"
-import { Group, Mesh, MeshStandardMaterial, Box3, Vector3, CanvasTexture, SRGBColorSpace, FrontSide } from "three"
+import { Group, Mesh, MeshStandardMaterial, Box3, Vector3, FrontSide } from "three"
 
 function getProxiedUrl(url: string): string {
   if (!url) return url
@@ -44,10 +44,9 @@ class ErrorBoundary extends Component<
 
 interface ModelProps {
   url: string
-  textureUrl?: string
 }
 
-function Model({ url, textureUrl }: ModelProps) {
+function Model({ url }: ModelProps) {
   const group = useRef<Group>(null)
   const { scene, animations } = useGLTF(url)
   const { actions, mixer } = useAnimations(animations, group)
@@ -69,35 +68,6 @@ function Model({ url, textureUrl }: ModelProps) {
       group.current.rotation.y += delta * 0.5
     }
   })
-
-  useEffect(() => {
-    if (!textureUrl) return
-
-    const img = new Image()
-    if (!textureUrl.startsWith('data:')) {
-      img.crossOrigin = "anonymous"
-    }
-    img.onload = () => {
-      const canvas = document.createElement("canvas")
-      const ctx = canvas.getContext("2d")
-      if (!ctx) return
-
-      canvas.width = img.width
-      canvas.height = img.height
-      ctx.drawImage(img, 0, 0)
-
-      const tex = new CanvasTexture(canvas)
-      tex.colorSpace = SRGBColorSpace
-
-      scene.traverse((node) => {
-        if (node instanceof Mesh && node.material instanceof MeshStandardMaterial) {
-          node.material.map = tex
-          node.material.needsUpdate = true
-        }
-      })
-    }
-    img.src = textureUrl
-  }, [textureUrl, scene])
 
   useEffect(() => {
     if (scene) {
@@ -146,10 +116,9 @@ function Loader() {
 interface ViewerProps {
   modelUrl: string
   animationUrl?: string
-  textureUrl?: string
 }
 
-export function ModelViewer({ modelUrl, animationUrl, textureUrl }: ViewerProps) {
+export function ModelViewer({ modelUrl, animationUrl }: ViewerProps) {
   const displayUrl = getProxiedUrl(animationUrl || modelUrl)
   const [error, setError] = useState<Error | null>(null)
   const [retryKey, setRetryKey] = useState(0)
@@ -198,11 +167,11 @@ export function ModelViewer({ modelUrl, animationUrl, textureUrl }: ViewerProps)
           <pointLight position={[-6, 8, -6]} intensity={0.6} />
 
           <Suspense fallback={<Loader />}>
-            <Model url={displayUrl} textureUrl={textureUrl} />
+            <Model url={displayUrl} />
             <ContactShadows position={[0, 0, 0]} opacity={0.5} scale={12} blur={2.5} far={4} />
           </Suspense>
 
-          <Environment preset="studio" />
+          <Environment files="https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/fish_hoek_beach_1k.hdr" background />
           <OrbitControls enablePan={false} minDistance={2} maxDistance={10} target={[0, 1, 0]} />
         </Canvas>
       </ErrorBoundary>

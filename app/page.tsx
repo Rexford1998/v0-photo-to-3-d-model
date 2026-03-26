@@ -192,7 +192,7 @@ export default function Home() {
             </div>
 
             <div className="aspect-[4/3] overflow-hidden rounded-2xl border border-border shadow-xl">
-              <ModelViewer modelUrl={modelUrl} animationUrl={animationUrl || undefined} textureUrl={selectedImage || undefined} />
+              <ModelViewer modelUrl={modelUrl} animationUrl={animationUrl || undefined} />
             </div>
 
             {animationUrl && (
