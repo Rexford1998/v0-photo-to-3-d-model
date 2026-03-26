@@ -7,7 +7,7 @@ import BodyCustomizer from "@/components/avatar/BodyCustomizer"
 import { useAvatar } from "@/hooks/useAvatar"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { ArrowLeft, Download, Camera, UploadCloud, Wand2, Loader2 } from "lucide-react"
+import { ArrowLeft, Download, Camera, UploadCloud, Wand2, Loader2, Gamepad2 } from "lucide-react"
 import { compressImage } from "@/lib/imageUtils"
 import { Canvas } from "@react-three/fiber"
 import { OrbitControls, Environment, useGLTF } from "@react-three/drei"
@@ -283,31 +283,53 @@ export default function AvatarBuilderPage() {
           </div>
 
           {/* Generate button pinned to bottom */}
-          <div className="p-4 border-t border-border bg-card">
-            <Button
-              className="w-full h-11 text-base font-semibold"
-              onClick={handleGenerate}
-              disabled={!headUrl || isGenerating}
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Generating... {generation.progress}%
-                </>
-              ) : (
-                <>
-                  <Wand2 className="mr-2 h-5 w-5" />
-                  Generate 3D Avatar
-                </>
-              )}
-            </Button>
+          <div className="p-4 border-t border-border bg-card space-y-2">
+            {generation.status === "succeeded" && generation.modelUrl ? (
+              <>
+                <Link 
+                  href={`/world?modelUrl=${encodeURIComponent(generation.modelUrl)}`}
+                  className="block w-full"
+                >
+                  <Button className="w-full h-11 text-base font-semibold bg-green-600 hover:bg-green-700">
+                    <Gamepad2 className="mr-2 h-5 w-5" />
+                    Join Multiplayer World
+                  </Button>
+                </Link>
+                <Button
+                  className="w-full h-10"
+                  variant="secondary"
+                  onClick={handleDownload}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Download GLB
+                </Button>
+              </>
+            ) : (
+              <Button
+                className="w-full h-11 text-base font-semibold"
+                onClick={handleGenerate}
+                disabled={!headUrl || isGenerating}
+              >
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    Generating... {generation.progress}%
+                  </>
+                ) : (
+                  <>
+                    <Wand2 className="mr-2 h-5 w-5" />
+                    Generate 3D Avatar
+                  </>
+                )}
+              </Button>
+            )}
             {!headUrl && (
-              <p className="text-xs text-center text-muted-foreground mt-2">
+              <p className="text-xs text-center text-muted-foreground">
                 Upload a photo first to enable generation
               </p>
             )}
             {generation.status === "failed" && generation.error && (
-              <p className="text-xs text-center text-destructive mt-2">
+              <p className="text-xs text-center text-destructive">
                 {generation.error}
               </p>
             )}
