@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import React, { useEffect, useRef, useState } from "react"
 import { Canvas, useFrame, useThree } from "@react-three/fiber"
 import { Html, PerspectiveCamera } from "@react-three/drei"
 import { useGLTF } from "@react-three/drei"
@@ -26,46 +26,89 @@ function getProxiedUrl(url: string): string {
   return `/api/proxy-model?url=${encodeURIComponent(url)}`
 }
 
-// GLB Model component that loads and displays the actual 3D model
-function PlayerModel({ modelUrl, color }: { modelUrl?: string; color: string }) {
-  if (!modelUrl) {
-    // Fallback to capsule if no model URL
-    return (
-      <>
-        <mesh castShadow position={[0, 0.6, 0]}>
-          <capsuleGeometry args={[0.3, 0.8, 4, 8]} />
-          <meshStandardMaterial color={color} />
-        </mesh>
-        <mesh position={[0, 1.3, 0]} castShadow>
-          <sphereGeometry args={[0.25, 16, 16]} />
-          <meshStandardMaterial color={color} />
-        </mesh>
-      </>
-    )
-  }
+// Fallback capsule avatar when no model is available
+function CapsuleAvatar({ color }: { color: string }) {
+  return (
+    <>
+      <mesh castShadow position={[0, 0.6, 0]}>
+        <capsuleGeometry args={[0.3, 0.8, 4, 8]} />
+        <meshStandardMaterial color={color} />
+      </mesh>
+      <mesh position={[0, 1.3, 0]} castShadow>
+        <sphereGeometry args={[0.25, 16, 16]} />
+        <meshStandardMaterial color={color} />
+      </mesh>
+    </>
+  )
+}
 
+// GLB Model loader component
+function GLBModel({ modelUrl }: { modelUrl: string }) {
+  const groupRef = useRef<THREE.Group>(null)
   const proxiedUrl = getProxiedUrl(modelUrl)
   const { scene } = useGLTF(proxiedUrl)
-  const clonedScene = scene.clone()
   
-  // Scale and position the model appropriately
   useEffect(() => {
-    // Center and scale the model
-    const box = new THREE.Box3().setFromObject(clonedScene)
+    if (!groupRef.current) return
+    
+    // Clone the scene for this instance
+    const cloned = scene.clone(true)
+    
+    // Clear any existing children
+    while (groupRef.current.children.length > 0) {
+      groupRef.current.remove(groupRef.current.children[0])
+    }
+    
+    // Scale and center the model
+    const box = new THREE.Box3().setFromObject(cloned)
     const size = box.getSize(new THREE.Vector3())
     const maxDim = Math.max(size.x, size.y, size.z)
-    const scale = 1.5 / maxDim // Normalize to ~1.5 units tall
-    clonedScene.scale.setScalar(scale)
+    const scale = 1.5 / maxDim
+    cloned.scale.setScalar(scale)
     
-    // Center on ground
-    const newBox = new THREE.Box3().setFromObject(clonedScene)
+    // Recalculate bounds after scaling
+    const newBox = new THREE.Box3().setFromObject(cloned)
     const center = newBox.getCenter(new THREE.Vector3())
-    clonedScene.position.y = -newBox.min.y
-    clonedScene.position.x = -center.x
-    clonedScene.position.z = -center.z
-  }, [clonedScene])
+    cloned.position.y = -newBox.min.y
+    cloned.position.x = -center.x
+    cloned.position.z = -center.z
+    
+    groupRef.current.add(cloned)
+  }, [scene])
 
-  return <primitive object={clonedScene} />
+  return <group ref={groupRef} />
+}
+
+// Player model wrapper - renders GLB or fallback
+function PlayerModel({ modelUrl, color }: { modelUrl?: string; color: string }) {
+  if (!modelUrl) {
+    return <CapsuleAvatar color={color} />
+  }
+  
+  return (
+    <ErrorBoundaryModel fallback={<CapsuleAvatar color={color} />}>
+      <GLBModel modelUrl={modelUrl} />
+    </ErrorBoundaryModel>
+  )
+}
+
+// Simple error boundary for model loading
+class ErrorBoundaryModel extends React.Component<{ children: React.ReactNode; fallback: React.ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: React.ReactNode; fallback: React.ReactNode }) {
+    super(props)
+    this.state = { hasError: false }
+  }
+  
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+  
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback
+    }
+    return this.props.children
+  }
 }
 
 // Player character component for other players (not local)

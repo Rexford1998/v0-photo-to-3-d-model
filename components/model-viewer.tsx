@@ -1,5 +1,6 @@
 "use client"
 
+// 3D Model Viewer component with GLB support
 import { useRef, useEffect, Suspense, useState, useCallback, Component, ReactNode, useMemo } from "react"
 import { Canvas, useFrame, useGraph } from "@react-three/fiber"
 import { OrbitControls, useGLTF, Html, ContactShadows, useAnimations, KeyboardControls, useKeyboardControls } from "@react-three/drei"
