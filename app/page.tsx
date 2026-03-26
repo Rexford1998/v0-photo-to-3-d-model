@@ -7,7 +7,8 @@ import { ImageUpload } from "@/components/image-upload"
 import { ProgressSteps } from "@/components/progress-steps"
 import { useMeshy } from "@/hooks/use-meshy"
 import { Button } from "@/components/ui/button"
-import { Sparkles, RotateCcw, Zap, Package, Play } from "lucide-react"
+import { Sparkles, RotateCcw, Zap, Package, Play, Gamepad2 } from "lucide-react"
+import Link from "next/link"
 
 const ModelViewer = dynamic(
   () => import("@/components/model-viewer").then((mod) => mod.ModelViewer),
@@ -74,14 +75,7 @@ export default function Home() {
             <h1 className="mb-4 text-balance text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
               Bring Your Photos to Life
             </h1>
-            <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-4">
-              <a href="#meshy-generator" className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90">
-                Full Body Generator
-              </a>
-              <a href="/avatar-builder" className="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-8 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground">
-                Custom Avatar Builder
-              </a>
-            </div>
+
             <p className="max-w-2xl text-lg text-muted-foreground">
               Upload a character image and watch it transform into an animated 3D model with textures and walking capabilities
             </p>
@@ -209,6 +203,17 @@ export default function Home() {
                   <Play className="h-4 w-4" />
                   <strong>Walking mode active:</strong> Click inside the 3D viewer, then use WASD to move and Mouse to look around.
                 </div>
+              </div>
+            )}
+
+            {modelUrl && (
+              <div className="flex justify-center mt-6">
+                <Link href={`/world?modelUrl=${encodeURIComponent(modelUrl)}`}>
+                  <Button size="lg" className="h-12 px-8 text-base font-semibold bg-green-600 hover:bg-green-700">
+                    <Gamepad2 className="mr-2 h-5 w-5" />
+                    Join Multiplayer World
+                  </Button>
+                </Link>
               </div>
             )}
           </div>
