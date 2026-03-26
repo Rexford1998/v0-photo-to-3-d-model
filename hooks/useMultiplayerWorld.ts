@@ -33,6 +33,7 @@ export function useMultiplayerWorld(modelUrl: string = "") {
   const [error, setError] = useState<string | null>(null)
   const [onlineCount, setOnlineCount] = useState(0)
 
+  // Subscribe to realtime player updates
   useEffect(() => {
     if (!playerId) return
 
@@ -76,6 +77,7 @@ export function useMultiplayerWorld(modelUrl: string = "") {
     }
   }, [playerId])
 
+  // Update online count
   useEffect(() => {
     setOnlineCount(players.length)
   }, [players])
@@ -102,6 +104,7 @@ export function useMultiplayerWorld(modelUrl: string = "") {
           .single()
 
         if (insertError) {
+          console.error("[v0] Join error:", insertError)
           setError(`Failed to join: ${insertError.message}`)
           return false
         }
@@ -121,6 +124,7 @@ export function useMultiplayerWorld(modelUrl: string = "") {
         setChatMessages((recentChat || []).reverse())
         return true
       } catch (err) {
+        console.error("[v0] Join error:", err)
         setError(err instanceof Error ? err.message : "Failed to join world")
         return false
       }
@@ -132,15 +136,19 @@ export function useMultiplayerWorld(modelUrl: string = "") {
     async (x: number, z: number, rotation: number) => {
       if (!playerId) return
 
-      await supabase
-        .from("players")
-        .update({
-          position_x: x,
-          position_z: z,
-          rotation_y: rotation,
-          last_seen: new Date().toISOString()
-        })
-        .eq("id", playerId)
+      try {
+        await supabase
+          .from("players")
+          .update({
+            position_x: x,
+            position_z: z,
+            rotation_y: rotation,
+            last_seen: new Date().toISOString()
+          })
+          .eq("id", playerId)
+      } catch (err) {
+        console.error("[v0] Position update error:", err)
+      }
     },
     [playerId]
   )
@@ -149,13 +157,17 @@ export function useMultiplayerWorld(modelUrl: string = "") {
     async (message: string, username: string) => {
       if (!playerId || !message.trim()) return
 
-      await supabase.from("chat_messages").insert([
-        {
-          player_id: playerId,
-          username,
-          message
-        }
-      ])
+      try {
+        await supabase.from("chat_messages").insert([
+          {
+            player_id: playerId,
+            username,
+            message
+          }
+        ])
+      } catch (err) {
+        console.error("[v0] Send message error:", err)
+      }
     },
     [playerId]
   )
@@ -163,11 +175,15 @@ export function useMultiplayerWorld(modelUrl: string = "") {
   const leaveWorld = useCallback(async () => {
     if (!playerId) return
 
-    await supabase.from("players").delete().eq("id", playerId)
-    setPlayerId(null)
-    setIsConnected(false)
-    setPlayers([])
-    setChatMessages([])
+    try {
+      await supabase.from("players").delete().eq("id", playerId)
+      setPlayerId(null)
+      setIsConnected(false)
+      setPlayers([])
+      setChatMessages([])
+    } catch (err) {
+      console.error("[v0] Leave error:", err)
+    }
   }, [playerId])
 
   return {
