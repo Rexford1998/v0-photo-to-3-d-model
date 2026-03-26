@@ -1,14 +1,15 @@
 "use client"
 
-// Main Page - Build: 2026-03-25-v4
+// Main Page - Build: 2026-03-25-v5
 import { useState } from "react"
 import dynamic from "next/dynamic"
 import { ImageUpload } from "@/components/image-upload"
 import { ProgressSteps } from "@/components/progress-steps"
 import { CustomAvatarButton } from "@/components/avatar/CustomAvatarButton"
+import { AvatarPreviewWithBody } from "@/components/avatar/AvatarPreviewWithBody"
 import { useMeshy } from "@/hooks/use-meshy"
 import { Button } from "@/components/ui/button"
-import { Sparkles, RotateCcw, Zap, Package, Play } from "lucide-react"
+import { Sparkles, RotateCcw, Zap, Package, Play, User } from "lucide-react"
 
 const ModelViewer = dynamic(
   () => import("@/components/model-viewer").then((mod) => mod.ModelViewer),
@@ -33,6 +34,8 @@ const STEPS = [
 
 export default function Home() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [avatarFaceImage, setAvatarFaceImage] = useState<string | null>(null)
+  const [showAvatarPreview, setShowAvatarPreview] = useState(false)
   const {
     stage,
     currentStep,
@@ -48,6 +51,28 @@ export default function Home() {
     setSelectedImage(dataUrl)
   }
 
+  // Handle avatar selection from CustomAvatarButton
+  const handleAvatarSelect = (imageData: string) => {
+    setAvatarFaceImage(imageData)
+    setShowAvatarPreview(true)
+  }
+
+  // Confirm avatar and start generation
+  const handleAvatarConfirm = async () => {
+    if (avatarFaceImage) {
+      setSelectedImage(avatarFaceImage)
+      setShowAvatarPreview(false)
+      // Auto-start generation
+      await generateModel(avatarFaceImage)
+    }
+  }
+
+  // Cancel avatar preview and go back
+  const handleAvatarCancel = () => {
+    setAvatarFaceImage(null)
+    setShowAvatarPreview(false)
+  }
+
   const handleGenerate = async () => {
     if (selectedImage) {
       await generateModel(selectedImage)
@@ -56,6 +81,8 @@ export default function Home() {
 
   const handleReset = () => {
     setSelectedImage(null)
+    setAvatarFaceImage(null)
+    setShowAvatarPreview(false)
     reset()
   }
 
@@ -83,19 +110,57 @@ export default function Home() {
       </header>
 
       <div className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
-        {!showModel ? (
+        {/* Avatar Preview with Body - shown when user selects a face from CustomAvatarButton */}
+        {showAvatarPreview && avatarFaceImage && !showModel && (
+          <div className="mx-auto max-w-lg mb-8">
+            <AvatarPreviewWithBody
+              faceImageUrl={avatarFaceImage}
+              onConfirm={handleAvatarConfirm}
+              onCancel={handleAvatarCancel}
+              isGenerating={isProcessing}
+            />
+            
+            {isProcessing && (
+              <div className="mt-6 rounded-2xl border border-border bg-card p-6">
+                <ProgressSteps
+                  steps={STEPS}
+                  currentStep={currentStep}
+                  progress={progress}
+                  error={error || undefined}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Normal upload flow */}
+        {!showAvatarPreview && !showModel && (
           <div className="mx-auto max-w-2xl space-y-8">
             <div className="space-y-4">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm text-muted-foreground">
-                  Upload a character image or create a custom avatar from your face
-                </p>
-                <CustomAvatarButton
-                  onAvatarSelect={(imageData) => {
-                    handleImageSelect(imageData)
-                  }}
-                  disabled={isProcessing}
-                />
+              {/* Custom Avatar Section */}
+              <div className="rounded-xl border border-dashed border-accent/50 bg-accent/5 p-4">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent/10">
+                    <User className="h-6 w-6 text-accent" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-medium text-foreground">Create Custom Avatar</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Use your face photo or camera to create a personalized 3D character
+                    </p>
+                  </div>
+                  <CustomAvatarButton
+                    onAvatarSelect={handleAvatarSelect}
+                    disabled={isProcessing}
+                  />
+                </div>
+              </div>
+
+              {/* Divider */}
+              <div className="flex items-center gap-4">
+                <div className="flex-1 border-t border-border" />
+                <span className="text-sm text-muted-foreground">or upload any image</span>
+                <div className="flex-1 border-t border-border" />
               </div>
               
               <ImageUpload
@@ -187,7 +252,10 @@ export default function Home() {
               </div>
             </div>
           </div>
-        ) : (
+        )}
+
+        {/* Final 3D Model View */}
+        {showModel && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <div>
