@@ -20,10 +20,38 @@ export function ImageUpload({ onImageSelect, disabled }: ImageUploadProps) {
       const file = acceptedFiles[0]
       if (file) {
         const reader = new FileReader()
-        reader.onload = () => {
-          const result = reader.result as string
-          setPreview(result)
-          onImageSelect(result)
+        reader.onload = (e) => {
+          const img = new window.Image()
+          img.onload = () => {
+            // Vercel Serverless Functions have a 4.5MB body size limit.
+            // Scale down the image to max 1024x1024 to ensure base64 payload is small enough.
+            const MAX_SIZE = 1024
+            let width = img.width
+            let height = img.height
+
+            if (width > height) {
+              if (width > MAX_SIZE) {
+                height *= MAX_SIZE / width
+                width = MAX_SIZE
+              }
+            } else {
+              if (height > MAX_SIZE) {
+                width *= MAX_SIZE / height
+                height = MAX_SIZE
+              }
+            }
+
+            const canvas = document.createElement("canvas")
+            canvas.width = width
+            canvas.height = height
+            const ctx = canvas.getContext("2d")
+            ctx?.drawImage(img, 0, 0, width, height)
+
+            const resizedDataUrl = canvas.toDataURL("image/jpeg", 0.8)
+            setPreview(resizedDataUrl)
+            onImageSelect(resizedDataUrl)
+          }
+          img.src = e.target?.result as string
         }
         reader.readAsDataURL(file)
       }

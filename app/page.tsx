@@ -196,9 +196,11 @@ export default function Home() {
             </div>
 
             {animationUrl && (
-              <div className="flex items-center justify-center gap-2 rounded-xl bg-accent/10 p-3 text-sm text-accent">
-                <Play className="h-4 w-4" />
-                Walking animation active
+              <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-accent/10 p-3 text-sm text-accent mt-4">
+                <div className="flex items-center gap-2">
+                  <Play className="h-4 w-4" />
+                  <strong>Walking mode active:</strong> Click inside the 3D viewer, then use WASD to move and Mouse to look around.
+                </div>
               </div>
             )}
           </div>
