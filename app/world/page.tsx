@@ -1,60 +1,18 @@
 "use client"
 
-import { useEffect, useRef, useState, useCallback } from "react"
-import { Canvas } from "@react-three/fiber"
-import { OrbitControls, Environment, PerspectiveCamera, useGLTF } from "@react-three/drei"
+import { useState, useEffect, useRef } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
-import { createClient } from "@supabase/supabase-js"
+import { Canvas } from "@react-three/fiber"
+import { OrbitControls, Environment, PerspectiveCamera } from "@react-three/drei"
 import * as THREE from "three"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Send, LogOut, Users, ArrowLeft } from "lucide-react"
-import Link from "next/link"
+import { useMultiplayerWorld } from "@/hooks/useMultiplayerWorld"
 
-// Initialize Supabase
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
-
-// 3D Avatar component that loads GLB model
-function AvatarModel({ modelUrl, position }: { modelUrl: string; position: [number, number, number] }) {
-  const groupRef = useRef<THREE.Group>(null)
-  const proxyUrl = `/api/model-proxy?url=${encodeURIComponent(modelUrl)}`
-  
-  try {
-    const { scene } = useGLTF(proxyUrl)
-    
-    useEffect(() => {
-      if (groupRef.current) {
-        groupRef.current.position.set(position[0], position[1], position[2])
-      }
-    }, [position])
-
-    return (
-      <group ref={groupRef}>
-        <primitive object={scene.clone()} scale={[0.5, 0.5, 0.5]} />
-      </group>
-    )
-  } catch {
-    // Fallback to capsule if model fails to load
-    return (
-      <group ref={groupRef} position={position}>
-        <mesh>
-          <capsuleGeometry args={[0.3, 1.2, 8, 16]} />
-          <meshStandardMaterial color="#3b82f6" />
-        </mesh>
-        <mesh position={[0, 0.8, 0]}>
-          <sphereGeometry args={[0.25, 32, 32]} />
-          <meshStandardMaterial color="#3b82f6" />
-        </mesh>
-      </group>
-    )
-  }
-}
-
-// Player representation in 3D with name label
-function PlayerAvatar({ player, isLocalPlayer, modelUrl }: { player: any; isLocalPlayer: boolean; modelUrl?: string }) {
+// Player 3D representation
+function PlayerAvatar({ player, isLocalPlayer }: { player: any; isLocalPlayer: boolean }) {
   const meshRef = useRef<THREE.Group>(null)
 
   useEffect(() => {
@@ -66,94 +24,59 @@ function PlayerAvatar({ player, isLocalPlayer, modelUrl }: { player: any; isLoca
 
   return (
     <group ref={meshRef}>
-      {modelUrl ? (
-        <AvatarModel modelUrl={modelUrl} position={[0, 0, 0]} />
-      ) : (
-        <>
-          {/* Fallback body */}
-          <mesh castShadow>
-            <capsuleGeometry args={[0.3, 1.2, 8, 16]} />
-            <meshStandardMaterial color={player.color || "#3b82f6"} />
-          </mesh>
-          {/* Fallback head */}
-          <mesh position={[0, 0.8, 0]} castShadow>
-            <sphereGeometry args={[0.25, 32, 32]} />
-            <meshStandardMaterial color={player.color || "#3b82f6"} />
-          </mesh>
-        </>
-      )}
-
+      {/* Body */}
+      <mesh castShadow>
+        <capsuleGeometry args={[0.3, 1.2, 8, 16]} />
+        <meshStandardMaterial color={player.color || "#3b82f6"} />
+      </mesh>
+      {/* Head */}
+      <mesh position={[0, 0.8, 0]} castShadow>
+        <sphereGeometry args={[0.25, 32, 32]} />
+        <meshStandardMaterial color={player.color || "#3b82f6"} />
+      </mesh>
       {/* Name label */}
       <mesh position={[0, 1.8, 0]}>
-        <planeGeometry args={[1.5, 0.3]} />
-        <meshBasicMaterial 
-          map={createNameTexture(player.nickname, isLocalPlayer)}
-          transparent
-        />
+        <planeGeometry args={[1, 0.25]} />
+        <meshBasicMaterial color="white" transparent opacity={0.8} />
       </mesh>
     </group>
   )
 }
 
-// Create canvas texture for name labels
-function createNameTexture(nickname: string, isLocal: boolean) {
-  const canvas = document.createElement("canvas")
-  canvas.width = 256
-  canvas.height = 64
-  const ctx = canvas.getContext("2d")!
-  ctx.fillStyle = isLocal ? "rgba(16, 185, 129, 0.9)" : "rgba(0, 0, 0, 0.7)"
-  ctx.fillRect(0, 0, 256, 64)
-  ctx.fillStyle = "#ffffff"
-  ctx.font = "bold 32px Arial"
-  ctx.textAlign = "center"
-  ctx.fillText(nickname, 128, 48)
-  const texture = new THREE.CanvasTexture(canvas)
-  return texture
-}
-
-// 3D World Scene
-function WorldScene({ players, localPlayerId, modelUrl }: { players: any[]; localPlayerId: string; modelUrl: string }) {
-  const cameraRef = useRef<THREE.PerspectiveCamera>(null)
-  const localPlayer = players.find(p => p.id === localPlayerId)
-
-  useEffect(() => {
-    if (cameraRef.current && localPlayer) {
-      cameraRef.current.position.set(
-        localPlayer.position_x,
-        localPlayer.position_y + 2,
-        localPlayer.position_z + 4
-      )
-      cameraRef.current.lookAt(localPlayer.position_x, localPlayer.position_y + 1, localPlayer.position_z)
-    }
-  }, [localPlayer])
-
+// World scene
+function WorldScene({ players, localPlayer }: { players: any[]; localPlayer: any }) {
   return (
-    <Canvas shadows>
-      <PerspectiveCamera ref={cameraRef} makeDefault position={[0, 2, 5]} />
-      <ambientLight intensity={0.7} />
-      <directionalLight position={[10, 10, 10]} intensity={1} castShadow />
-
-      {/* Ground plane */}
+    <>
+      {/* Ground */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[200, 200]} />
-        <meshStandardMaterial color="#4b5563" />
+        <planeGeometry args={[100, 100]} />
+        <meshStandardMaterial color="#10b981" />
       </mesh>
 
-      {/* Grid */}
-      <gridHelper args={[200, 40]} position={[0, 0.01, 0]} />
+      {/* Lighting */}
+      <ambientLight intensity={0.6} />
+      <directionalLight
+        position={[10, 20, 10]}
+        intensity={1}
+        castShadow
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
+      />
 
       {/* Players */}
-      {players.map(player => (
-        <PlayerAvatar 
-          key={player.id} 
-          player={player} 
-          isLocalPlayer={player.id === localPlayerId}
-          modelUrl={player.model_url || modelUrl}
+      {players.map((player) => (
+        <PlayerAvatar
+          key={player.id}
+          player={player}
+          isLocalPlayer={localPlayer?.id === player.id}
         />
       ))}
 
+      {/* Camera and controls */}
+      <PerspectiveCamera makeDefault position={[0, 5, 15]} fov={50} />
+      <OrbitControls target={[0, 1, 0]} minDistance={5} maxDistance={50} />
       <Environment preset="city" />
-    </Canvas>
+    </>
   )
 }
 
@@ -161,216 +84,27 @@ export default function WorldPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const modelUrl = searchParams.get("modelUrl")
-  
-  const [players, setPlayers] = useState<any[]>([])
-  const [localPlayer, setLocalPlayer] = useState<any>(null)
-  const [nickname, setNickname] = useState("")
-  const [joined, setJoined] = useState(false)
-  const [chatMessages, setChatMessages] = useState<any[]>([])
-  const [chatInput, setChatInput] = useState("")
-  const keysPressed = useRef<Record<string, boolean>>({})
-  const updateInterval = useRef<NodeJS.Timeout>()
 
-  // Check if model URL exists
+  const [nickname, setNickname] = useState("")
+  const [color, setColor] = useState("#3b82f6")
+  const [isJoining, setIsJoining] = useState(false)
+
+  const { playerId, players, chatMessages, isConnected, error: hookError, onlineCount, joinWorld, sendMessage, leaveWorld } = useMultiplayerWorld(modelUrl || "")
+
+  const [chatMessage, setChatMessage] = useState("")
+
+  // If no model URL, show error
   if (!modelUrl) {
     return (
-      <div className="w-full h-screen bg-gradient-to-br from-background to-secondary/50 flex items-center justify-center">
-        <div className="bg-card border border-border rounded-2xl shadow-xl p-8 max-w-md w-full mx-4 text-center">
-          <h1 className="text-3xl font-bold mb-2">Generate Avatar First</h1>
+      <div className="w-full h-screen flex items-center justify-center bg-background">
+        <div className="text-center max-w-md p-8 bg-card rounded-xl border border-border shadow-lg">
+          <h1 className="text-2xl font-bold mb-4">No Avatar Generated</h1>
           <p className="text-muted-foreground mb-6">
-            You need to generate a 3D avatar before joining the multiplayer world.
+            You need to generate a 3D avatar first before joining the multiplayer world.
           </p>
           <Link href="/avatar-builder">
             <Button className="w-full">
-              Go to Avatar Builder
-            </Button>
-          </Link>
-        </div>
-      </div>
-    )
-  }
-
-  // Join world
-  const handleJoinWorld = useCallback(async () => {
-    if (!nickname.trim()) return
-
-    try {
-      const { data, error } = await supabase
-        .from("players")
-        .insert([
-          {
-            nickname,
-            model_url: modelUrl,
-            position_x: Math.random() * 20 - 10,
-            position_y: 0,
-            position_z: Math.random() * 20 - 10,
-            rotation_y: 0,
-            color: `#${Math.floor(Math.random() * 16777215).toString(16)}`
-          }
-        ])
-        .select()
-
-      if (error) throw error
-      setLocalPlayer(data[0])
-      setJoined(true)
-
-      // Subscribe to player updates
-      const channel = supabase
-        .channel("players-channel")
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "players" },
-          payload => {
-            if (payload.eventType === "DELETE") {
-              setPlayers(prev => prev.filter(p => p.id !== payload.old.id))
-            } else {
-              setPlayers(prev => {
-                const existing = prev.findIndex(p => p.id === payload.new.id)
-                if (existing >= 0) {
-                  const updated = [...prev]
-                  updated[existing] = payload.new
-                  return updated
-                }
-                return [...prev, payload.new]
-              })
-            }
-          }
-        )
-        .subscribe()
-
-      // Subscribe to chat
-      supabase
-        .channel("chat-channel")
-        .on(
-          "postgres_changes",
-          { event: "INSERT", schema: "public", table: "chat_messages" },
-          payload => {
-            setChatMessages(prev => [...prev, payload.new])
-          }
-        )
-        .subscribe()
-
-      // Load initial players
-      const { data: playersData } = await supabase
-        .from("players")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(20)
-
-      setPlayers(playersData || [])
-    } catch (err) {
-      console.error("Failed to join world:", err)
-    }
-  }, [nickname, modelUrl])
-
-  // Handle keyboard movement
-  useEffect(() => {
-    if (!localPlayer) return
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      keysPressed.current[e.key.toLowerCase()] = true
-    }
-
-    const handleKeyUp = (e: KeyboardEvent) => {
-      keysPressed.current[e.key.toLowerCase()] = false
-    }
-
-    window.addEventListener("keydown", handleKeyDown)
-    window.addEventListener("keyup", handleKeyUp)
-
-    // Update position based on keys
-    const moveSpeed = 0.15
-    updateInterval.current = setInterval(async () => {
-      let newX = localPlayer.position_x
-      let newZ = localPlayer.position_z
-      let newRotation = localPlayer.rotation_y
-
-      if (keysPressed.current["w"]) newZ -= moveSpeed
-      if (keysPressed.current["s"]) newZ += moveSpeed
-      if (keysPressed.current["a"]) {
-        newX -= moveSpeed
-        newRotation = Math.PI / 2
-      }
-      if (keysPressed.current["d"]) {
-        newX += moveSpeed
-        newRotation = -Math.PI / 2
-      }
-
-      if (newX !== localPlayer.position_x || newZ !== localPlayer.position_z) {
-        await supabase
-          .from("players")
-          .update({
-            position_x: newX,
-            position_z: newZ,
-            rotation_y: newRotation,
-            last_seen: new Date()
-          })
-          .eq("id", localPlayer.id)
-
-        setLocalPlayer(prev => ({ ...prev, position_x: newX, position_z: newZ, rotation_y: newRotation }))
-      }
-    }, 50)
-
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown)
-      window.removeEventListener("keyup", handleKeyUp)
-      if (updateInterval.current) clearInterval(updateInterval.current)
-    }
-  }, [localPlayer])
-
-  // Send chat message
-  const handleSendChat = async () => {
-    if (!chatInput.trim() || !localPlayer) return
-
-    try {
-      await supabase.from("chat_messages").insert([
-        {
-          player_id: localPlayer.id,
-          username: localPlayer.nickname,
-          message: chatInput
-        }
-      ])
-      setChatInput("")
-    } catch (err) {
-      console.error("Failed to send message:", err)
-    }
-  }
-
-  // Leave world
-  const handleLeaveWorld = async () => {
-    if (localPlayer) {
-      await supabase.from("players").delete().eq("id", localPlayer.id)
-    }
-    setJoined(false)
-    setLocalPlayer(null)
-    setChatMessages([])
-  }
-
-  if (!joined) {
-    return (
-      <div className="w-full h-screen bg-gradient-to-br from-background to-secondary/50 flex items-center justify-center">
-        <div className="bg-card border border-border rounded-2xl shadow-xl p-8 max-w-md w-full mx-4">
-          <h1 className="text-3xl font-bold mb-2">Enter World</h1>
-          <p className="text-muted-foreground mb-6">Join the multiplayer world with your generated avatar</p>
-          
-          <Input
-            placeholder="Enter your nickname"
-            value={nickname}
-            onChange={e => setNickname(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && handleJoinWorld()}
-            className="mb-4"
-            maxLength={20}
-            autoFocus
-          />
-          
-          <Button onClick={handleJoinWorld} className="w-full mb-2" disabled={!nickname.trim()}>
-            <Users className="h-4 w-4 mr-2" />
-            Join World
-          </Button>
-          
-          <Link href="/avatar-builder">
-            <Button variant="outline" className="w-full">
-              <ArrowLeft className="h-4 w-4 mr-2" />
+              <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Avatar Builder
             </Button>
           </Link>
@@ -379,63 +113,162 @@ export default function WorldPage() {
     )
   }
 
-  return (
-    <div className="w-full h-screen flex flex-col bg-background">
-      {/* 3D World */}
-      <div className="flex-1 relative">
-        <WorldScene players={players} localPlayerId={localPlayer?.id} modelUrl={modelUrl} />
-        
-        {/* UI Overlay */}
-        <div className="absolute top-4 left-4 right-4 flex justify-between items-start pointer-events-none">
-          <div className="bg-background/80 backdrop-blur border border-border rounded-lg p-3 pointer-events-auto">
-            <p className="text-sm font-medium">{nickname}</p>
-            <p className="text-xs text-muted-foreground">WASD to move</p>
+  // Join form
+  if (!isConnected) {
+    const handleJoin = async () => {
+      if (!nickname.trim()) return
+      setIsJoining(true)
+      const success = await joinWorld(nickname, color)
+      if (!success) {
+        setIsJoining(false)
+      }
+    }
+
+    return (
+      <div className="w-full h-screen flex items-center justify-center bg-background">
+        <div className="max-w-md w-full p-8 bg-card rounded-xl border border-border shadow-lg space-y-6">
+          <div>
+            <h1 className="text-3xl font-bold">Join World</h1>
+            <p className="text-muted-foreground mt-2">Enter your nickname and join the multiplayer world</p>
           </div>
-          
-          <div className="bg-background/80 backdrop-blur border border-border rounded-lg p-3 pointer-events-auto">
-            <p className="text-sm font-medium flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              {players.length} online
-            </p>
+
+          {hookError && (
+            <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
+              <p className="text-sm text-destructive">{hookError}</p>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium mb-2 block">Nickname</label>
+              <Input
+                placeholder="Enter your nickname"
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                disabled={isJoining}
+                onKeyDown={(e) => e.key === "Enter" && !isJoining && handleJoin()}
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-2 block">Color</label>
+              <div className="flex gap-2">
+                {["#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6"].map((c) => (
+                  <button
+                    key={c}
+                    className={`w-8 h-8 rounded-full border-2 transition-all ${color === c ? "border-foreground scale-110" : "border-transparent"}`}
+                    style={{ backgroundColor: c }}
+                    onClick={() => setColor(c)}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleLeaveWorld}
-            className="pointer-events-auto"
-          >
-            <LogOut className="h-4 w-4 mr-2" />
-            Leave
+
+          <Button onClick={handleJoin} disabled={!nickname.trim() || isJoining} className="w-full">
+            {isJoining ? "Joining..." : "Join World"}
           </Button>
+
+          <Link href="/avatar-builder">
+            <Button variant="outline" className="w-full">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Builder
+            </Button>
+          </Link>
         </div>
       </div>
+    )
+  }
 
-      {/* Chat Panel */}
-      <div className="bg-card border-t border-border p-4 flex flex-col gap-3 h-32">
-        <div className="flex-1 overflow-y-auto space-y-2 text-sm">
-          {chatMessages.slice(-5).map((msg, i) => (
-            <div key={i} className="text-foreground">
-              <span className="font-medium text-primary">{msg.username || "Anonymous"}:</span>
-              <span className="ml-2 text-muted-foreground">{msg.message}</span>
+  // World view
+  return (
+    <div className="w-full h-screen flex bg-background">
+      {/* 3D Canvas */}
+      <div className="flex-1">
+        <Canvas shadows>
+          <WorldScene players={players} localPlayer={players.find((p) => p.id === playerId)} />
+        </Canvas>
+      </div>
+
+      {/* UI Overlay */}
+      <div className="w-96 h-full bg-card border-l border-border flex flex-col">
+        {/* Header */}
+        <div className="p-4 border-b border-border">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              <span className="font-semibold">Online: {onlineCount}</span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={async () => {
+                await leaveWorld()
+                router.push("/avatar-builder")
+              }}
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              Leave
+            </Button>
+          </div>
+
+          <div className="text-sm text-muted-foreground">
+            Players in world
+          </div>
+        </div>
+
+        {/* Players List */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+          {players.map((player) => (
+            <div key={player.id} className="p-2 bg-secondary rounded-lg text-sm">
+              <div className="flex items-center gap-2">
+                <div
+                  className="w-3 h-3 rounded-full"
+                  style={{ backgroundColor: player.color || "#3b82f6" }}
+                />
+                <span className="font-medium">{player.nickname}</span>
+                {player.id === playerId && <span className="text-xs text-primary ml-auto">(You)</span>}
+              </div>
             </div>
           ))}
         </div>
-        <div className="flex gap-2">
-          <Input
-            placeholder="Type a message..."
-            value={chatInput}
-            onChange={e => setChatInput(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && handleSendChat()}
-            className="flex-1"
-          />
-          <Button
-            onClick={handleSendChat}
-            size="sm"
-            className="px-3"
-          >
-            <Send className="h-4 w-4" />
-          </Button>
+
+        {/* Chat */}
+        <div className="border-t border-border p-4 space-y-4">
+          <div className="h-32 bg-secondary rounded-lg overflow-y-auto p-2 space-y-1">
+            {chatMessages.slice(-10).map((msg) => (
+              <div key={msg.id} className="text-xs">
+                <span className="font-semibold text-primary">{msg.username}:</span>
+                <span className="text-muted-foreground ml-1">{msg.message}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex gap-2">
+            <Input
+              placeholder="Say something..."
+              value={chatMessage}
+              onChange={(e) => setChatMessage(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && chatMessage.trim()) {
+                  sendMessage(chatMessage, players.find((p) => p.id === playerId)?.nickname || "Anonymous")
+                  setChatMessage("")
+                }
+              }}
+              className="text-sm"
+            />
+            <Button
+              size="sm"
+              onClick={() => {
+                if (chatMessage.trim()) {
+                  sendMessage(chatMessage, players.find((p) => p.id === playerId)?.nickname || "Anonymous")
+                  setChatMessage("")
+                }
+              }}
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
     </div>

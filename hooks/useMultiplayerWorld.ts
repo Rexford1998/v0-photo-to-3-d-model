@@ -1,88 +1,135 @@
 import { useEffect, useState, useCallback } from "react"
-import { createClient } from "@supabase/supabase-js"
+import { createClient } from "@/lib/supabase/client"
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+const supabase = createClient()
 
-export function useMultiplayerWorld() {
-  const [players, setPlayers] = useState<any[]>([])
-  const [chatMessages, setChatMessages] = useState<any[]>([])
-  const [localPlayer, setLocalPlayer] = useState<any>(null)
+interface Player {
+  id: string
+  nickname: string
+  model_url?: string
+  position_x: number
+  position_y: number
+  position_z: number
+  rotation_y: number
+  color: string
+  created_at: string
+}
+
+interface ChatMessage {
+  id: string
+  player_id: string
+  username: string
+  message: string
+  created_at: string
+}
+
+export function useMultiplayerWorld(modelUrl: string = "") {
+  const [players, setPlayers] = useState<Player[]>([])
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
+  const [playerId, setPlayerId] = useState<string | null>(null)
   const [isConnected, setIsConnected] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [onlineCount, setOnlineCount] = useState(0)
 
   // Subscribe to realtime updates
   useEffect(() => {
-    if (!localPlayer) return
+    if (!playerId) return
 
-    // Players subscription
-    const playersChannel = supabase
-      .channel(`players-${localPlayer.id}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "players" },
-        payload => {
-          if (payload.eventType === "DELETE") {
-            setPlayers(prev => prev.filter(p => p.id !== payload.old.id))
-          } else if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
-            setPlayers(prev => {
-              const idx = prev.findIndex(p => p.id === payload.new.id)
-              if (idx >= 0) {
-                const updated = [...prev]
-                updated[idx] = payload.new
-                return updated
-              }
-              return [...prev, payload.new]
-            })
+    try {
+      // Players subscription
+      const playersChannel = supabase
+        .channel(`players-${playerId}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "players" },
+          (payload: any) => {
+            if (payload.eventType === "DELETE") {
+              setPlayers(prev => prev.filter(p => p.id !== payload.old.id))
+            } else if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
+              setPlayers(prev => {
+                const idx = prev.findIndex(p => p.id === payload.new.id)
+                if (idx >= 0) {
+                  const updated = [...prev]
+                  updated[idx] = payload.new
+                  return updated
+                }
+                return [...prev, payload.new]
+              })
+            }
           }
-        }
-      )
-      .subscribe()
+        )
+        .subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            console.log("[v0] Subscribed to players channel")
+          }
+        })
 
-    // Chat subscription
-    const chatChannel = supabase
-      .channel(`chat-${localPlayer.id}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "chat_messages" },
-        payload => {
-          setChatMessages(prev => [...prev, payload.new])
-        }
-      )
-      .subscribe()
+      // Chat subscription
+      const chatChannel = supabase
+        .channel(`chat-${playerId}`)
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "chat_messages" },
+          (payload: any) => {
+            setChatMessages(prev => [...prev, payload.new])
+          }
+        )
+        .subscribe()
 
-    return () => {
-      playersChannel.unsubscribe()
-      chatChannel.unsubscribe()
+      return () => {
+        playersChannel.unsubscribe()
+        chatChannel.unsubscribe()
+      }
+    } catch (err) {
+      console.error("[v0] Subscription error:", err)
+      setError("Failed to connect to multiplayer")
     }
-  }, [localPlayer])
+  }, [playerId])
+
+  // Update online count whenever players change
+  useEffect(() => {
+    setOnlineCount(players.length)
+  }, [players])
 
   const joinWorld = useCallback(
-    async (nickname: string) => {
+    async (nickname: string, color: string) => {
       try {
-        const { data, error } = await supabase
+        setError(null)
+        const { data, error: insertError } = await supabase
           .from("players")
           .insert([
             {
               nickname,
+              model_url: modelUrl || null,
               position_x: Math.random() * 20 - 10,
               position_y: 0,
               position_z: Math.random() * 20 - 10,
               rotation_y: 0,
-              color: `#${Math.floor(Math.random() * 16777215).toString(16)}`
+              color
             }
           ])
           .select()
           .single()
 
-        if (error) throw error
-        setLocalPlayer(data)
+        if (insertError) {
+          console.error("[v0] Insert error:", insertError)
+          setError(`Failed to join: ${insertError.message}`)
+          return false
+        }
+
+        setPlayerId(data.id)
         setIsConnected(true)
 
         // Load all players
-        const { data: allPlayers } = await supabase.from("players").select("*")
-        setPlayers(allPlayers || [])
+        const { data: allPlayers, error: fetchError } = await supabase
+          .from("players")
+          .select("*")
+
+        if (fetchError) {
+          console.error("[v0] Fetch players error:", fetchError)
+        } else {
+          setPlayers(allPlayers || [])
+        }
 
         // Load recent chat
         const { data: recentChat } = await supabase
@@ -92,62 +139,81 @@ export function useMultiplayerWorld() {
           .limit(50)
 
         setChatMessages((recentChat || []).reverse())
+        return true
       } catch (err) {
-        console.error("Failed to join world:", err)
+        console.error("[v0] Failed to join world:", err)
+        setError(err instanceof Error ? err.message : "Failed to join world")
+        return false
       }
     },
-    []
+    [modelUrl]
   )
 
   const updatePosition = useCallback(
     async (x: number, z: number, rotation: number) => {
-      if (!localPlayer) return
+      if (!playerId) return
 
-      await supabase
-        .from("players")
-        .update({
-          position_x: x,
-          position_z: z,
-          rotation_y: rotation,
-          last_seen: new Date()
-        })
-        .eq("id", localPlayer.id)
+      try {
+        const { error } = await supabase
+          .from("players")
+          .update({
+            position_x: x,
+            position_z: z,
+            rotation_y: rotation,
+            last_seen: new Date().toISOString()
+          })
+          .eq("id", playerId)
 
-      setLocalPlayer(prev => ({ ...prev, position_x: x, position_z: z, rotation_y: rotation }))
+        if (error) console.error("[v0] Position update error:", error)
+      } catch (err) {
+        console.error("[v0] Failed to update position:", err)
+      }
     },
-    [localPlayer]
+    [playerId]
   )
 
   const sendMessage = useCallback(
-    async (message: string) => {
-      if (!localPlayer || !message.trim()) return
+    async (message: string, username: string) => {
+      if (!playerId || !message.trim()) return
 
-      await supabase.from("chat_messages").insert([
-        {
-          player_id: localPlayer.id,
-          username: localPlayer.nickname,
-          message
-        }
-      ])
+      try {
+        const { error } = await supabase.from("chat_messages").insert([
+          {
+            player_id: playerId,
+            username,
+            message
+          }
+        ])
+
+        if (error) console.error("[v0] Send message error:", error)
+      } catch (err) {
+        console.error("[v0] Failed to send message:", err)
+      }
     },
-    [localPlayer]
+    [playerId]
   )
 
   const leaveWorld = useCallback(async () => {
-    if (!localPlayer) return
+    if (!playerId) return
 
-    await supabase.from("players").delete().eq("id", localPlayer.id)
-    setLocalPlayer(null)
-    setIsConnected(false)
-    setPlayers([])
-    setChatMessages([])
-  }, [localPlayer])
+    try {
+      await supabase.from("players").delete().eq("id", playerId)
+      setPlayerId(null)
+      setIsConnected(false)
+      setPlayers([])
+      setChatMessages([])
+    } catch (err) {
+      console.error("[v0] Failed to leave world:", err)
+    }
+  }, [playerId])
 
   return {
+    playerId,
     players,
     chatMessages,
-    localPlayer,
     isConnected,
+    error,
+    onlineCount,
     joinWorld,
     updatePosition,
     sendMessage,
