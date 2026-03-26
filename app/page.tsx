@@ -81,6 +81,9 @@ export default function Home() {
               <a href="/avatar-builder" className="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-8 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground">
                 Custom Avatar Builder
               </a>
+              <a href="/world" className="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-8 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground">
+                Multiplayer World
+              </a>
             </div>
             <p className="max-w-2xl text-lg text-muted-foreground">
               Upload a character image and watch it transform into an animated 3D model with textures and walking capabilities
