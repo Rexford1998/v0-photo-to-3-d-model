@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, Suspense, useState, useCallback, Component, ReactNode } from "react"
 import { Canvas, useFrame, useThree } from "@react-three/fiber"
-import { OrbitControls, Html, Environment, ContactShadows } from "@react-three/drei"
+import { OrbitControls, Html, ContactShadows } from "@react-three/drei"
 import { Group, Mesh, MeshStandardMaterial, SphereGeometry, CylinderGeometry, BoxGeometry, Vector3, Color, CanvasTexture, SRGBColorSpace } from "three"
 import { Button } from "@/components/ui/button"
 import { CheckCircle2, RotateCcw, Play, User, Sparkles } from "lucide-react"
@@ -320,7 +320,6 @@ export function AvatarPreviewWithBody({
               />
             </Suspense>
 
-            <Environment preset="studio" />
             <OrbitControls
               enablePan={false}
               minDistance={2}
