@@ -168,27 +168,6 @@ export function useMultiplayerWorld(modelUrl: string = "") {
     },
     [modelUrl]
   )
-        } else {
-          setPlayers(allPlayers || [])
-        }
-
-        // Load recent chat
-        const { data: recentChat } = await supabase
-          .from("chat_messages")
-          .select("*")
-          .order("created_at", { ascending: false })
-          .limit(50)
-
-        setChatMessages((recentChat || []).reverse())
-        return true
-      } catch (err) {
-        console.error("[v0] Failed to join world:", err)
-        setError(err instanceof Error ? err.message : "Failed to join world")
-        return false
-      }
-    },
-    [modelUrl]
-  )
 
   const updatePosition = useCallback(
     async (x: number, z: number, rotation: number) => {
