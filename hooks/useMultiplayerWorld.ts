@@ -1,6 +1,10 @@
 "use client"
 
-// Multiplayer world hook - realtime player sync and chat via Supabase
+/**
+ * Multiplayer World Hook
+ * Handles real-time player synchronization and chat via Supabase
+ * Updated: Forces cache invalidation
+ */
 import { useEffect, useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
 

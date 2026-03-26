@@ -1,7 +1,11 @@
 "use client"
 
-// 3D Model Viewer - displays GLB models with orbit controls
-// No external HDR/Environment presets to avoid rate limiting
+/**
+ * 3D Model Viewer Component
+ * Displays GLB models with orbit controls
+ * Uses solid background color to avoid HDR rate limits
+ * Updated: Forces cache invalidation
+ */
 import { useRef, useEffect, Suspense, useState, useCallback, Component, ReactNode, useMemo } from "react"
 import { Canvas, useFrame, useGraph } from "@react-three/fiber"
 import { OrbitControls, useGLTF, Html, ContactShadows, useAnimations, KeyboardControls, useKeyboardControls } from "@react-three/drei"
