@@ -1,5 +1,6 @@
 "use client"
 
+// Multiplayer world - 3D environment with player sync and chat
 import { useSearchParams, useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
 import Link from "next/link"
