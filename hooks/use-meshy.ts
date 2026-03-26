@@ -2,6 +2,7 @@
 
 // Meshy API Hook - Build: 2026-03-25-v4
 import { useState, useCallback, useRef } from "react"
+import { createImageTo3DTask } from "@/actions/meshy"
 
 interface MeshyTask {
   id: string
@@ -158,20 +159,8 @@ export function useMeshy(): UseMeshyResult {
       setCurrentStep(0)
       setProgress(0)
 
-      const createResponse = await fetch("/api/meshy/image-to-3d", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageUrl: imageDataUrl }),
-        signal,
-      })
-
-      const createData = await createResponse.json()
-      
-      if (!createResponse.ok) {
-        throw new Error(createData.error || "Failed to start generation")
-      }
-
-      const { taskId } = createData
+      // Use Server Action to bypass 4MB/1MB Route Handler body size limits
+      const taskId = await createImageTo3DTask(imageDataUrl)
 
       // Poll for Image to 3D completion
       const task = await pollTask(taskId, signal)
