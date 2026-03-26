@@ -17,6 +17,57 @@ interface Player {
   color: string
 }
 
+// Proxy URL helper for external model URLs
+function getProxiedUrl(url: string): string {
+  if (!url) return url
+  if (url.startsWith("/api/proxy-model") || url.startsWith("/") || url.startsWith("blob:") || url.startsWith("data:")) {
+    return url
+  }
+  return `/api/proxy-model?url=${encodeURIComponent(url)}`
+}
+
+// GLB Model component that loads and displays the actual 3D model
+function PlayerModel({ modelUrl, color }: { modelUrl?: string; color: string }) {
+  if (!modelUrl) {
+    // Fallback to capsule if no model URL
+    return (
+      <>
+        <mesh castShadow position={[0, 0.6, 0]}>
+          <capsuleGeometry args={[0.3, 0.8, 4, 8]} />
+          <meshStandardMaterial color={color} />
+        </mesh>
+        <mesh position={[0, 1.3, 0]} castShadow>
+          <sphereGeometry args={[0.25, 16, 16]} />
+          <meshStandardMaterial color={color} />
+        </mesh>
+      </>
+    )
+  }
+
+  const proxiedUrl = getProxiedUrl(modelUrl)
+  const { scene } = useGLTF(proxiedUrl)
+  const clonedScene = scene.clone()
+  
+  // Scale and position the model appropriately
+  useEffect(() => {
+    // Center and scale the model
+    const box = new THREE.Box3().setFromObject(clonedScene)
+    const size = box.getSize(new THREE.Vector3())
+    const maxDim = Math.max(size.x, size.y, size.z)
+    const scale = 1.5 / maxDim // Normalize to ~1.5 units tall
+    clonedScene.scale.setScalar(scale)
+    
+    // Center on ground
+    const newBox = new THREE.Box3().setFromObject(clonedScene)
+    const center = newBox.getCenter(new THREE.Vector3())
+    clonedScene.position.y = -newBox.min.y
+    clonedScene.position.x = -center.x
+    clonedScene.position.z = -center.z
+  }, [clonedScene])
+
+  return <primitive object={clonedScene} />
+}
+
 // Player character component for other players (not local)
 function OtherPlayerCharacter({ player }: { player: Player }) {
   const groupRef = useRef<THREE.Group>(null)
@@ -39,17 +90,7 @@ function OtherPlayerCharacter({ player }: { player: Player }) {
 
   return (
     <group ref={groupRef} position={[player.position_x, player.position_y, player.position_z]}>
-      {/* Body */}
-      <mesh castShadow position={[0, 0.6, 0]}>
-        <capsuleGeometry args={[0.3, 0.8, 4, 8]} />
-        <meshStandardMaterial color={player.color} />
-      </mesh>
-
-      {/* Head */}
-      <mesh position={[0, 1.3, 0]} castShadow>
-        <sphereGeometry args={[0.25, 16, 16]} />
-        <meshStandardMaterial color={player.color} />
-      </mesh>
+      <PlayerModel modelUrl={player.model_url} color={player.color} />
 
       {/* Name label */}
       <Html position={[0, 1.8, 0]} center>
@@ -62,7 +103,7 @@ function OtherPlayerCharacter({ player }: { player: Player }) {
 }
 
 // Local player character that we control
-function LocalPlayerCharacter({ player, positionRef, rotationRef }: { player: Player; positionRef: React.MutableRefObject<{x: number, z: number}>; rotationRef: React.MutableRefObject<number> }) {
+function LocalPlayerCharacter({ player, positionRef, rotationRef, modelUrl }: { player: Player; positionRef: React.MutableRefObject<{x: number, z: number}>; rotationRef: React.MutableRefObject<number>; modelUrl: string }) {
   const groupRef = useRef<THREE.Group>(null)
 
   useFrame(() => {
@@ -75,17 +116,7 @@ function LocalPlayerCharacter({ player, positionRef, rotationRef }: { player: Pl
 
   return (
     <group ref={groupRef} position={[positionRef.current.x, 0, positionRef.current.z]}>
-      {/* Body */}
-      <mesh castShadow position={[0, 0.6, 0]}>
-        <capsuleGeometry args={[0.3, 0.8, 4, 8]} />
-        <meshStandardMaterial color={player.color} />
-      </mesh>
-
-      {/* Head */}
-      <mesh position={[0, 1.3, 0]} castShadow>
-        <sphereGeometry args={[0.25, 16, 16]} />
-        <meshStandardMaterial color={player.color} />
-      </mesh>
+      <PlayerModel modelUrl={modelUrl || player.model_url} color={player.color} />
 
       {/* Name label */}
       <Html position={[0, 1.8, 0]} center>
@@ -98,7 +129,7 @@ function LocalPlayerCharacter({ player, positionRef, rotationRef }: { player: Pl
 }
 
 // Main scene
-function Scene({ players, localPlayerId, onPositionChange }: { players: Player[]; localPlayerId: string | null; onPositionChange: (x: number, z: number, rotation: number) => void }) {
+function Scene({ players, localPlayerId, modelUrl, onPositionChange }: { players: Player[]; localPlayerId: string | null; modelUrl: string; onPositionChange: (x: number, z: number, rotation: number) => void }) {
   const cameraRef = useRef<THREE.PerspectiveCamera>(null)
   const localPlayer = players.find((p) => p.id === localPlayerId)
   const keysPressed = useRef<{ [key: string]: boolean }>({})
@@ -191,7 +222,7 @@ function Scene({ players, localPlayerId, onPositionChange }: { players: Player[]
       {/* Players */}
       {players.map((player) => (
         player.id === localPlayerId ? (
-          <LocalPlayerCharacter key={player.id} player={player} positionRef={positionRef} rotationRef={rotationRef} />
+          <LocalPlayerCharacter key={player.id} player={player} positionRef={positionRef} rotationRef={rotationRef} modelUrl={modelUrl} />
         ) : (
           <OtherPlayerCharacter key={player.id} player={player} />
         )
@@ -217,7 +248,7 @@ export default function WorldScene({ players, localPlayerId, modelUrl, onPositio
   return (
     <div className="w-full h-screen">
       <Canvas shadows>
-        <Scene players={players} localPlayerId={localPlayerId} onPositionChange={onPositionChange} />
+        <Scene players={players} localPlayerId={localPlayerId} modelUrl={modelUrl} onPositionChange={onPositionChange} />
       </Canvas>
     </div>
   )
