@@ -1,50 +1,109 @@
-// Complete Three.js Avatar Canvas with loading states, error handling, and 3D rendering
+"use client"
 
-import React, { useEffect, useRef, useState } from 'react';
-import * as THREE from 'three';
+import { Canvas } from "@react-three/fiber"
+import { OrbitControls, Environment, ContactShadows } from "@react-three/drei"
+import { useEffect, useState, useRef } from "react"
+import { createAvatar } from "@/lib/avatarBuilder"
+import * as THREE from "three"
+import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js"
 
-const AvatarCanvas = () => {
-    const canvasRef = useRef(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+export default function AvatarCanvas({ headUrl, morphs }: { headUrl: string | null, morphs: Record<string, number> }) {
+  const [avatar, setAvatar] = useState<THREE.Group | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const sceneRef = useRef<THREE.Group>(null)
 
-    useEffect(() => {
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ canvas: canvasRef.current });
-        renderer.setSize(window.innerWidth, window.innerHeight);
+  useEffect(() => {
+    if (!headUrl) {
+      setAvatar(null)
+      return
+    }
 
-        // Load avatar model
-        const loader = new THREE.GLTFLoader();
-        loader.load('path/to/avatar.gltf', (gltf) => {
-            scene.add(gltf.scene);
-            setLoading(false);
-        }, undefined, (err) => {
-            setError('Error loading avatar');
-            setLoading(false);
-        });
+    const loadAvatar = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+        const newAvatar = await createAvatar({ userHeadUrl: headUrl, morphs })
+        setAvatar(newAvatar)
+      } catch (err) {
+        console.error("Failed to load avatar:", err)
+        setError(err instanceof Error ? err.message : "Failed to load avatar")
+        setAvatar(null)
+      } finally {
+        setLoading(false)
+      }
+    }
 
-        camera.position.z = 5;
+    loadAvatar()
+  }, [headUrl, morphs])
 
-        const animate = function () {
-            requestAnimationFrame(animate);
-            renderer.render(scene, camera);
-        };
-        animate();
+  useEffect(() => {
+    const handleExport = () => {
+      if (!sceneRef.current) return
+      
+      const exporter = new GLTFExporter()
+      exporter.parse(
+        sceneRef.current,
+        (result) => {
+          const blob = new Blob([result as BlobPart], { type: "model/gltf-binary" })
+          const url = URL.createObjectURL(blob)
 
-        return () => {
-            // Cleanup
-            renderer.dispose();
-        };
-    }, []);
+          const a = document.createElement("a")
+          a.href = url
+          a.download = "custom-avatar.glb"
+          a.click()
+          URL.revokeObjectURL(url)
+        },
+        (error) => {
+          console.error("An error happened during export:", error)
+        },
+        { binary: true }
+      )
+    }
 
+    window.addEventListener("export-avatar", handleExport)
+    return () => window.removeEventListener("export-avatar", handleExport)
+  }, [])
+
+  if (error) {
     return (
-        <div>
-            {loading && <p>Loading...</p>}
-            {error && <p>{error}</p>}
-            <canvas ref={canvasRef} />
-        </div>
-    );
-};
+      <div className="w-full h-full flex items-center justify-center bg-red-500/10 rounded-lg">
+        <p className="text-red-600 text-center">{error}</p>
+      </div>
+    )
+  }
 
-export default AvatarCanvas;
+  if (loading) {
+    return (
+      <div className="w-full h-full flex items-center justify-center">
+        <div className="flex flex-col items-center gap-2">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
+          <p className="text-sm text-muted-foreground">Loading avatar...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <Canvas camera={{ position: [0, 1.5, 3], fov: 50 }} shadows gl={{ antialias: true }}>
+      <ambientLight intensity={0.6} />
+      <directionalLight position={[5, 8, 5]} intensity={1.2} castShadow />
+      <pointLight position={[-5, 5, 5]} intensity={0.6} />
+      
+      {avatar && (
+        <group ref={sceneRef}>
+          <primitive object={avatar} />
+        </group>
+      )}
+
+      <ContactShadows position={[0, -0.01, 0]} opacity={0.4} scale={10} blur={2} far={4} />
+      <Environment preset="city" />
+      <OrbitControls 
+        target={[0, 1.5, 0]} 
+        minDistance={1.5} 
+        maxDistance={6}
+        autoRotate={false}
+      />
+    </Canvas>
+  )
+}
