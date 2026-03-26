@@ -8,6 +8,7 @@ import { useAvatar } from "@/hooks/useAvatar"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { ArrowLeft, Download, Camera, UploadCloud, Wand2, Loader2 } from "lucide-react"
+import { compressImage } from "@/lib/imageUtils"
 import { Canvas } from "@react-three/fiber"
 import { OrbitControls, Environment, useGLTF } from "@react-three/drei"
 
@@ -113,11 +114,14 @@ export default function AvatarBuilderPage() {
     })
 
     try {
+      // Compress image to avoid 413 payload too large errors
+      const compressedImage = await compressImage(headUrl, 1024, 1024, 0.7)
+      
       const response = await fetch("/api/generate-avatar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          imageUrl: headUrl,
+          imageUrl: compressedImage,
           gender: bodySettings.gender,
           height: bodySettings.height,
           weight: bodySettings.weight,
@@ -144,11 +148,11 @@ export default function AvatarBuilderPage() {
 
       // Start polling for status
       pollTaskStatus(data.taskId)
-    } catch {
+    } catch (err) {
       setGeneration(prev => ({
         ...prev,
         status: "failed",
-        error: "Failed to start generation"
+        error: err instanceof Error ? err.message : "Failed to start generation"
       }))
     }
   }
