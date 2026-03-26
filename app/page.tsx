@@ -5,6 +5,7 @@ import { useState } from "react"
 import dynamic from "next/dynamic"
 import { ImageUpload } from "@/components/image-upload"
 import { ProgressSteps } from "@/components/progress-steps"
+import { CustomAvatarButton } from "@/components/avatar/CustomAvatarButton"
 import { useMeshy } from "@/hooks/use-meshy"
 import { Button } from "@/components/ui/button"
 import { Sparkles, RotateCcw, Zap, Package, Play } from "lucide-react"
@@ -85,6 +86,18 @@ export default function Home() {
         {!showModel ? (
           <div className="mx-auto max-w-2xl space-y-8">
             <div className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm text-muted-foreground">
+                  Upload a character image or create a custom avatar from your face
+                </p>
+                <CustomAvatarButton
+                  onAvatarSelect={(imageData) => {
+                    handleImageSelect(imageData)
+                  }}
+                  disabled={isProcessing}
+                />
+              </div>
+              
               <ImageUpload
                 onImageSelect={handleImageSelect}
                 disabled={isProcessing}
