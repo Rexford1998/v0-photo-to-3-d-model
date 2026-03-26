@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { Canvas, useFrame, useThree } from "@react-three/fiber"
-import { OrbitControls, Html, Text } from "@react-three/drei"
+import { Html, PerspectiveCamera } from "@react-three/drei"
 import { useGLTF } from "@react-three/drei"
 import * as THREE from "three"
 
@@ -17,28 +17,36 @@ interface Player {
   color: string
 }
 
-// Player character component
-function PlayerCharacter({ player, isLocal }: { player: Player; isLocal: boolean }) {
+// Player character component for other players (not local)
+function OtherPlayerCharacter({ player }: { player: Player }) {
   const groupRef = useRef<THREE.Group>(null)
-  const [model, setModel] = useState<THREE.Group | null>(null)
 
-  useEffect(() => {
+  useFrame(() => {
     if (groupRef.current) {
-      groupRef.current.position.set(player.position_x, player.position_y, player.position_z)
-      groupRef.current.rotation.y = player.rotation_y
+      // Smoothly interpolate to target position
+      groupRef.current.position.lerp(
+        new THREE.Vector3(player.position_x, player.position_y, player.position_z),
+        0.1
+      )
+      // Smoothly interpolate rotation
+      groupRef.current.rotation.y = THREE.MathUtils.lerp(
+        groupRef.current.rotation.y,
+        player.rotation_y,
+        0.1
+      )
     }
-  }, [player.position_x, player.position_y, player.position_z, player.rotation_y])
+  })
 
   return (
-    <group ref={groupRef}>
-      {/* Simple avatar representation with capsule shape */}
-      <mesh castShadow>
-        <capsuleGeometry args={[0.3, 1.2, 4, 8]} />
+    <group ref={groupRef} position={[player.position_x, player.position_y, player.position_z]}>
+      {/* Body */}
+      <mesh castShadow position={[0, 0.6, 0]}>
+        <capsuleGeometry args={[0.3, 0.8, 4, 8]} />
         <meshStandardMaterial color={player.color} />
       </mesh>
 
       {/* Head */}
-      <mesh position={[0, 0.7, 0]} castShadow>
+      <mesh position={[0, 1.3, 0]} castShadow>
         <sphereGeometry args={[0.25, 16, 16]} />
         <meshStandardMaterial color={player.color} />
       </mesh>
@@ -47,7 +55,42 @@ function PlayerCharacter({ player, isLocal }: { player: Player; isLocal: boolean
       <Html position={[0, 1.8, 0]} center>
         <div className="bg-background/90 px-2 py-1 rounded text-xs font-semibold whitespace-nowrap text-foreground border border-border">
           {player.nickname}
-          {isLocal && " (You)"}
+        </div>
+      </Html>
+    </group>
+  )
+}
+
+// Local player character that we control
+function LocalPlayerCharacter({ player, positionRef, rotationRef }: { player: Player; positionRef: React.MutableRefObject<{x: number, z: number}>; rotationRef: React.MutableRefObject<number> }) {
+  const groupRef = useRef<THREE.Group>(null)
+
+  useFrame(() => {
+    if (groupRef.current) {
+      groupRef.current.position.x = positionRef.current.x
+      groupRef.current.position.z = positionRef.current.z
+      groupRef.current.rotation.y = rotationRef.current
+    }
+  })
+
+  return (
+    <group ref={groupRef} position={[positionRef.current.x, 0, positionRef.current.z]}>
+      {/* Body */}
+      <mesh castShadow position={[0, 0.6, 0]}>
+        <capsuleGeometry args={[0.3, 0.8, 4, 8]} />
+        <meshStandardMaterial color={player.color} />
+      </mesh>
+
+      {/* Head */}
+      <mesh position={[0, 1.3, 0]} castShadow>
+        <sphereGeometry args={[0.25, 16, 16]} />
+        <meshStandardMaterial color={player.color} />
+      </mesh>
+
+      {/* Name label */}
+      <Html position={[0, 1.8, 0]} center>
+        <div className="bg-background/90 px-2 py-1 rounded text-xs font-semibold whitespace-nowrap text-foreground border border-border">
+          {player.nickname} (You)
         </div>
       </Html>
     </group>
@@ -147,14 +190,18 @@ function Scene({ players, localPlayerId, onPositionChange }: { players: Player[]
 
       {/* Players */}
       {players.map((player) => (
-        <PlayerCharacter key={player.id} player={player} isLocal={player.id === localPlayerId} />
+        player.id === localPlayerId ? (
+          <LocalPlayerCharacter key={player.id} player={player} positionRef={positionRef} rotationRef={rotationRef} />
+        ) : (
+          <OtherPlayerCharacter key={player.id} player={player} />
+        )
       ))}
 
       {/* Environment */}
       <color attach="background" args={["#87CEEB"]} />
 
       {/* Camera */}
-      <perspectiveCamera ref={cameraRef} makeDefault position={[0, 2, 5]} fov={50} />
+      <PerspectiveCamera ref={cameraRef} makeDefault position={[0, 2, 5]} fov={50} />
     </>
   )
 }
