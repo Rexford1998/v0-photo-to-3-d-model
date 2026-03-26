@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useCallback, Suspense } from "react"
 import { Upload } from "@/components/avatar/Upload"
 import { CameraCapture } from "@/components/avatar/CameraCapture"
 import BodyCustomizer from "@/components/avatar/BodyCustomizer"
@@ -11,11 +11,41 @@ import { ArrowLeft, Download, Camera, UploadCloud, Wand2, Loader2 } from "lucide
 import { compressImage } from "@/lib/imageUtils"
 import { Canvas } from "@react-three/fiber"
 import { OrbitControls, Environment, useGLTF } from "@react-three/drei"
+import { ErrorBoundary } from "react-error-boundary"
 
-// Component to load and display GLB model from URL
+// Component to load and display GLB model from URL via proxy
 function MeshyModel({ url }: { url: string }) {
-  const { scene } = useGLTF(url)
+  // Proxy the URL through our API to avoid CORS issues
+  const proxyUrl = `/api/model-proxy?url=${encodeURIComponent(url)}`
+  const { scene } = useGLTF(proxyUrl)
   return <primitive object={scene} />
+}
+
+// Loading fallback for the 3D model
+function ModelLoader() {
+  return (
+    <mesh>
+      <boxGeometry args={[0.5, 0.5, 0.5]} />
+      <meshStandardMaterial color="#888" wireframe />
+    </mesh>
+  )
+}
+
+// Error fallback component
+function ModelError({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) {
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-muted-foreground p-8">
+      <div className="h-16 w-16 rounded-full bg-destructive/10 flex items-center justify-center">
+        <span className="text-destructive text-2xl">!</span>
+      </div>
+      <p className="text-sm text-center text-destructive">
+        Failed to load 3D model. The model may have expired.
+      </p>
+      <Button variant="outline" size="sm" onClick={resetErrorBoundary}>
+        Try Again
+      </Button>
+    </div>
+  )
 }
 
 interface GenerationState {
@@ -161,7 +191,9 @@ export default function AvatarBuilderPage() {
     if (!generation.modelUrl) return
     
     try {
-      const response = await fetch(generation.modelUrl)
+      // Use proxy to download to avoid CORS issues
+      const proxyUrl = `/api/model-proxy?url=${encodeURIComponent(generation.modelUrl)}`
+      const response = await fetch(proxyUrl)
       const blob = await response.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
@@ -285,13 +317,23 @@ export default function AvatarBuilderPage() {
         {/* Right panel: canvas */}
         <section className="bg-secondary/30 rounded-2xl border border-border shadow-inner relative overflow-hidden">
           {generation.status === "succeeded" && generation.modelUrl ? (
-            <Canvas camera={{ position: [0, 1, 3], fov: 50 }} shadows>
-              <ambientLight intensity={0.6} />
-              <directionalLight position={[5, 5, 5]} intensity={1} castShadow />
-              <MeshyModel url={generation.modelUrl} />
-              <Environment preset="city" />
-              <OrbitControls target={[0, 0.8, 0]} minDistance={1} maxDistance={6} />
-            </Canvas>
+            <ErrorBoundary
+              FallbackComponent={ModelError}
+              onReset={() => {
+                // Clear the failed model URL to allow retrying
+                setGeneration(prev => ({ ...prev, status: "idle", modelUrl: null }))
+              }}
+            >
+              <Canvas camera={{ position: [0, 1, 3], fov: 50 }} shadows>
+                <ambientLight intensity={0.6} />
+                <directionalLight position={[5, 5, 5]} intensity={1} castShadow />
+                <Suspense fallback={<ModelLoader />}>
+                  <MeshyModel url={generation.modelUrl} />
+                </Suspense>
+                <Environment preset="city" />
+                <OrbitControls target={[0, 0.8, 0]} minDistance={1} maxDistance={6} />
+              </Canvas>
+            </ErrorBoundary>
           ) : isGenerating ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-6">
               <div className="relative">
