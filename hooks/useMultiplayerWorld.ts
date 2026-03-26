@@ -95,38 +95,79 @@ export function useMultiplayerWorld(modelUrl: string = "") {
     async (nickname: string, color: string) => {
       try {
         setError(null)
-        const { data, error: insertError } = await supabase
-          .from("players")
-          .insert([
-            {
-              nickname,
-              model_url: modelUrl || null,
-              position_x: Math.random() * 20 - 10,
-              position_y: 0,
-              position_z: Math.random() * 20 - 10,
-              rotation_y: 0,
-              color
+        
+        // Retry logic for schema cache issues
+        let retries = 0
+        let lastError: any = null
+        
+        while (retries < 3) {
+          const { data, error: insertError } = await supabase
+            .from("players")
+            .insert([
+              {
+                nickname,
+                model_url: modelUrl || null,
+                position_x: Math.random() * 20 - 10,
+                position_y: 0,
+                position_z: Math.random() * 20 - 10,
+                rotation_y: 0,
+                color
+              }
+            ])
+            .select()
+            .single()
+
+          if (insertError) {
+            lastError = insertError
+            // If it's a schema cache issue, retry
+            if (insertError.code === 'PGRST205') {
+              retries++
+              if (retries < 3) {
+                await new Promise(resolve => setTimeout(resolve, 1000 * retries))
+                continue
+              }
             }
-          ])
-          .select()
-          .single()
+            console.error("[v0] Insert error:", insertError)
+            setError(`Failed to join: ${insertError.message}`)
+            return false
+          }
 
-        if (insertError) {
-          console.error("[v0] Insert error:", insertError)
-          setError(`Failed to join: ${insertError.message}`)
-          return false
+          setPlayerId(data.id)
+          setIsConnected(true)
+
+          // Load all players
+          const { data: allPlayers, error: fetchError } = await supabase
+            .from("players")
+            .select("*")
+
+          if (fetchError) {
+            console.error("[v0] Fetch players error:", fetchError)
+          } else {
+            setPlayers(allPlayers || [])
+          }
+
+          // Load recent chat
+          const { data: recentChat } = await supabase
+            .from("chat_messages")
+            .select("*")
+            .order("created_at", { ascending: false })
+            .limit(50)
+
+          setChatMessages((recentChat || []).reverse())
+          return true
         }
-
-        setPlayerId(data.id)
-        setIsConnected(true)
-
-        // Load all players
-        const { data: allPlayers, error: fetchError } = await supabase
-          .from("players")
-          .select("*")
-
-        if (fetchError) {
-          console.error("[v0] Fetch players error:", fetchError)
+        
+        // All retries failed
+        setError(`Failed to join: ${lastError?.message || 'Database unavailable'}`)
+        return false
+      } catch (err) {
+        console.error("[v0] Failed to join world:", err)
+        setError(err instanceof Error ? err.message : "Failed to join world")
+        return false
+      }
+    },
+    [modelUrl]
+  )
         } else {
           setPlayers(allPlayers || [])
         }

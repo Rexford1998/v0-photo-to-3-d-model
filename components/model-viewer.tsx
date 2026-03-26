@@ -5,6 +5,9 @@ import { Canvas, useFrame, useGraph } from "@react-three/fiber"
 import { OrbitControls, useGLTF, Environment, Html, ContactShadows, useAnimations, KeyboardControls, useKeyboardControls } from "@react-three/drei"
 import { Group, Mesh, MeshStandardMaterial, Box3, Vector3, FrontSide, TextureLoader, SRGBColorSpace, Object3D, MathUtils } from "three"
 import { SkeletonUtils } from "three-stdlib"
+import dynamic from "next/dynamic"
+
+const Ecctrl = dynamic(() => import("ecctrl"), { ssr: false })
 
 function getProxiedUrl(url: string): string {
   if (!url) return url
@@ -260,7 +263,7 @@ export function ModelViewer({ modelUrl, animationUrl }: ViewerProps) {
               )}
             </Suspense>
 
-            <Environment files="https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/fish_hoek_beach_1k.hdr" background />
+            <Environment preset="studio" background />
           </Canvas>
         </KeyboardControls>
       </ErrorBoundary>
@@ -282,25 +285,31 @@ function WalkingModelContent({ displayUrl, originalUrl }: { displayUrl: string; 
 }
 
 function WalkingModelAsync({ displayUrl, originalUrl }: { displayUrl: string; originalUrl: string }) {
-  // Dynamically import Physics and Ecctrl only when needed
+  // Dynamically import Physics only when needed
   const [PhysicsModule, setPhysicsModule] = useState<any>(null)
+  const [ecctrlReady, setEcctrlReady] = useState(false)
 
   useEffect(() => {
-    import("@react-three/rapier").then((mod) => {
-      setPhysicsModule({ Physics: mod.Physics, RigidBody: mod.RigidBody })
-    })
+    Promise.all([
+      import("@react-three/rapier").then((mod) => {
+        setPhysicsModule({ Physics: mod.Physics, RigidBody: mod.RigidBody })
+      }),
+      new Promise(resolve => setTimeout(() => { setEcctrlReady(true); resolve(null) }, 100))
+    ]).catch(err => console.error("[v0] Failed to load modules:", err))
   }, [])
 
-  if (!PhysicsModule) return <Loader />
+  if (!PhysicsModule || !ecctrlReady) return <Loader />
 
   const { Physics, RigidBody } = PhysicsModule
 
   return (
     <>
       <Physics timeStep="vary">
-        <Ecctrl animated={true} camInitDis={-5} camMaxDis={-7} maxVelLimit={3}>
-          <Model url={displayUrl} originalModelUrl={originalUrl} isWalkingMode={true} />
-        </Ecctrl>
+        <Suspense fallback={<Loader />}>
+          <Ecctrl animated={true} camInitDis={-5} camMaxDis={-7} maxVelLimit={3}>
+            <Model url={displayUrl} originalModelUrl={originalUrl} isWalkingMode={true} />
+          </Ecctrl>
+        </Suspense>
         {/* Beach floor plane */}
         <RigidBody type="fixed" colliders="trimesh">
           <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]}>
