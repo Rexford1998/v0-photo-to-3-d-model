@@ -1,5 +1,6 @@
 "use client"
 
+// Multiplayer hook for real-time player and chat sync via Supabase
 import { useEffect, useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
 

@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, Suspense, useState, useCallback, Component, ReactNode, useMemo } from "react"
 import { Canvas, useFrame, useGraph } from "@react-three/fiber"
-import { OrbitControls, useGLTF, Environment, Html, ContactShadows, useAnimations, KeyboardControls, useKeyboardControls } from "@react-three/drei"
+import { OrbitControls, useGLTF, Html, ContactShadows, useAnimations, KeyboardControls, useKeyboardControls } from "@react-three/drei"
 import { Group, Mesh, MeshStandardMaterial, Box3, Vector3, FrontSide, TextureLoader, SRGBColorSpace, Object3D, MathUtils } from "three"
 import { SkeletonUtils } from "three-stdlib"
 import dynamic from "next/dynamic"
@@ -263,7 +263,8 @@ export function ModelViewer({ modelUrl, animationUrl }: ViewerProps) {
               )}
             </Suspense>
 
-            <Environment preset="studio" background />
+            {/* Sky background color instead of HDR to avoid rate limits */}
+            <color attach="background" args={["#f0f4f8"]} />
           </Canvas>
         </KeyboardControls>
       </ErrorBoundary>

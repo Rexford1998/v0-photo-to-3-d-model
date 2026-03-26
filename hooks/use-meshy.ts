@@ -170,6 +170,7 @@ export function useMeshy(): UseMeshyResult {
       }
 
       const generatedModelUrl = task.model_urls.glb
+      console.log("[v0] Generated model URL:", generatedModelUrl)
       setModelUrl(getProxiedUrl(generatedModelUrl))
 
       // Step 2: Start rigging to get walking animation
@@ -179,7 +180,16 @@ export function useMeshy(): UseMeshyResult {
 
       let riggingTaskId: string | null = null
       
+      // Ensure the model URL is valid and accessible
+      if (!generatedModelUrl || !generatedModelUrl.startsWith("http")) {
+        console.warn("[v0] Invalid model URL for rigging:", generatedModelUrl)
+        setStage("complete")
+        setCurrentStep(2)
+        return
+      }
+      
       try {
+        console.log("[v0] Starting rigging with URL:", generatedModelUrl)
         const riggingResponse = await fetch("/api/meshy/rigging", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

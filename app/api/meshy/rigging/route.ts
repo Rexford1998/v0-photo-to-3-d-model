@@ -20,6 +20,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Validate URL format
+    if (!modelUrl.startsWith("http")) {
+      console.error("Invalid model URL format:", modelUrl)
+      return NextResponse.json(
+        { error: "Invalid model URL format - must be a valid HTTP URL" },
+        { status: 400 }
+      )
+    }
+
+    console.log("Creating rigging task for model:", modelUrl)
+
     // Create rigging task - this will also generate walking animation
     const response = await fetch("https://api.meshy.ai/openapi/v1/rigging", {
       method: "POST",
