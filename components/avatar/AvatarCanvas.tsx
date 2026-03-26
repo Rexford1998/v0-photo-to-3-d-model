@@ -3,19 +3,49 @@
 import { Canvas } from "@react-three/fiber"
 import { OrbitControls, Environment, ContactShadows } from "@react-three/drei"
 import { useEffect, useState, useRef } from "react"
-import { createAvatar } from "@/lib/avatarBuilder"
+import { createAvatar, createBodyPreview, type BodySettings } from "@/lib/avatarBuilder"
 import * as THREE from "three"
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js"
 
-export default function AvatarCanvas({ headUrl, morphs }: { headUrl: string | null, morphs: Record<string, number> }) {
+interface AvatarCanvasProps {
+  headUrl: string | null
+  morphs: Record<string, number>
+  bodySettings: BodySettings
+}
+
+export default function AvatarCanvas({ headUrl, morphs, bodySettings }: AvatarCanvasProps) {
   const [avatar, setAvatar] = useState<THREE.Group | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const sceneRef = useRef<THREE.Group>(null)
 
   useEffect(() => {
-    if (!headUrl) return
+    // If no head URL, show a body preview with placeholder head
+    if (!headUrl) {
+      try {
+        const preview = createBodyPreview(bodySettings)
+        setAvatar(preview)
+        setError(null)
+      } catch {
+        setAvatar(null)
+      }
+      return
+    }
 
-    createAvatar({ userHeadUrl: headUrl, morphs }).then(setAvatar)
-  }, [headUrl, morphs])
+    setIsLoading(true)
+    setError(null)
+    
+    createAvatar({ userHeadUrl: headUrl, morphs, body: bodySettings })
+      .then((result) => {
+        setAvatar(result)
+        setIsLoading(false)
+      })
+      .catch((err) => {
+        console.error("[v0] Failed to create avatar:", err)
+        setError("Failed to create avatar. Please try again.")
+        setIsLoading(false)
+      })
+  }, [headUrl, morphs, bodySettings])
 
   useEffect(() => {
     const handleExport = () => {
@@ -45,19 +75,31 @@ export default function AvatarCanvas({ headUrl, morphs }: { headUrl: string | nu
   }, [])
 
   return (
-    <Canvas camera={{ position: [0, 1.5, 3], fov: 50 }} shadows gl={{ antialias: true }}>
-      <ambientLight intensity={0.5} />
-      <directionalLight position={[5, 5, 5]} intensity={1} castShadow />
-
-      {avatar && (
-        <group ref={sceneRef}>
-          <primitive object={avatar} />
-        </group>
+    <div className="relative w-full h-full">
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-background/50 z-10">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
       )}
+      {error && (
+        <div className="absolute inset-0 flex items-center justify-center bg-background/50 z-10">
+          <p className="text-destructive text-sm">{error}</p>
+        </div>
+      )}
+      <Canvas camera={{ position: [0, 1.2, 3], fov: 50 }} shadows gl={{ antialias: true }}>
+        <ambientLight intensity={0.6} />
+        <directionalLight position={[5, 5, 5]} intensity={1} castShadow />
 
-      <ContactShadows position={[0, -0.01, 0]} opacity={0.4} scale={10} blur={2} far={4} />
-      <Environment preset="city" />
-      <OrbitControls target={[0, 1.5, 0]} minDistance={1} maxDistance={5} />
-    </Canvas>
+        {avatar && (
+          <group ref={sceneRef}>
+            <primitive object={avatar} />
+          </group>
+        )}
+
+        <ContactShadows position={[0, 0, 0]} opacity={0.4} scale={10} blur={2} far={4} />
+        <Environment preset="city" />
+        <OrbitControls target={[0, 1, 0]} minDistance={1.5} maxDistance={6} />
+      </Canvas>
+    </div>
   )
 }
