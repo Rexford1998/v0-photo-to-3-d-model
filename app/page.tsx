@@ -61,9 +61,6 @@ export default function Home() {
 
   const isProcessing = stage === "generating" || stage === "rigging" || stage === "uploading"
   const showModel = stage === "complete" && modelUrl
-  
-  // Debug logging for multiplayer button visibility
-  console.log("[v0] Stage:", stage, "| modelUrl:", modelUrl ? "set" : "null", "| showModel:", showModel)
 
   return (
     <main className="min-h-screen bg-background">

@@ -230,26 +230,23 @@ export function useMeshy(): UseMeshyResult {
       }
 
       const generatedModelUrl = task.model_urls.glb
-      console.log("[v0] Generated model URL:", generatedModelUrl)
       setModelUrl(getProxiedUrl(generatedModelUrl))
 
-      // Step 2: Start rigging to get walking animation
+      // Step 2: Attempt rigging for walking animation (optional - many models won't be riggable)
+      // Rigging requires a humanoid model with clear body pose - photo-based models often fail
       setStage("rigging")
       setCurrentStep(1)
       setProgress(0)
 
-      let riggingTaskId: string | null = null
-      
-      // Ensure the model URL is valid and accessible
+      // Skip rigging if URL is invalid
       if (!generatedModelUrl || !generatedModelUrl.startsWith("http")) {
-        console.warn("[v0] Invalid model URL for rigging:", generatedModelUrl)
         setStage("complete")
         setCurrentStep(2)
         return
       }
       
+      // Try rigging but don't fail the whole process if it doesn't work
       try {
-        console.log("[v0] Starting rigging with URL:", generatedModelUrl)
         const riggingResponse = await fetch("/api/meshy/rigging", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -257,43 +254,24 @@ export function useMeshy(): UseMeshyResult {
           signal,
         })
 
-        if (!riggingResponse.ok) {
-          // If rigging fails, still show the static model
-          console.warn("Rigging failed, showing static model")
-          setStage("complete")
-          setCurrentStep(2)
-          return
+        if (riggingResponse.ok) {
+          const riggingData = await riggingResponse.json()
+          
+          if (riggingData.taskId) {
+            // Poll for rigging completion
+            const riggingTask = await pollRiggingTask(riggingData.taskId, signal)
+
+            // Set the walking animation URL if available
+            if (riggingTask.result?.basic_animations?.walking_glb_url) {
+              setAnimationUrl(getProxiedUrl(riggingTask.result.basic_animations.walking_glb_url))
+            } else if (riggingTask.result?.rigged_character_glb_url) {
+              setAnimationUrl(getProxiedUrl(riggingTask.result.rigged_character_glb_url))
+            }
+          }
         }
-
-        const riggingData = await riggingResponse.json()
-        riggingTaskId = riggingData.taskId
-      } catch (riggingErr) {
-        console.warn("Rigging request failed, showing static model:", riggingErr)
-        setStage("complete")
-        setCurrentStep(2)
-        return
-      }
-
-      if (!riggingTaskId) {
-        console.warn("No rigging task ID, showing static model")
-        setStage("complete")
-        setCurrentStep(2)
-        return
-      }
-
-      // Poll for rigging completion
-      try {
-        const riggingTask = await pollRiggingTask(riggingTaskId, signal)
-
-        // Set the walking animation URL if available
-        if (riggingTask.result?.basic_animations?.walking_glb_url) {
-          setAnimationUrl(getProxiedUrl(riggingTask.result.basic_animations.walking_glb_url))
-        } else if (riggingTask.result?.rigged_character_glb_url) {
-          // Use rigged character if no walking animation
-          setAnimationUrl(getProxiedUrl(riggingTask.result.rigged_character_glb_url))
-        }
-      } catch (pollErr) {
-        console.warn("Rigging poll failed, showing static model:", pollErr)
+        // If rigging fails for any reason, we just continue without animation
+      } catch {
+        // Rigging is optional - silently continue without animation
       }
 
       setStage("complete")

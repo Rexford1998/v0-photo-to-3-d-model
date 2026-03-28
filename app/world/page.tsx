@@ -36,9 +36,6 @@ function WorldPageContent() {
     leaveWorld,
   } = useMultiplayerWorld(modelUrl || "")
 
-  // Debug logging
-  console.log("[v0] World page - modelUrl:", modelUrl ? "set" : "null", "| isConnected:", isConnected, "| error:", hookError)
-
   if (!modelUrl) {
     return (
       <main className="min-h-screen bg-background flex items-center justify-center p-4">
