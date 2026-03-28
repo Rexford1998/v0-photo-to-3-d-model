@@ -87,7 +87,9 @@ function PlayerModel({ modelUrl, color }: { modelUrl?: string; color: string }) 
   
   return (
     <ErrorBoundaryModel fallback={<CapsuleAvatar color={color} />}>
-      <GLBModel modelUrl={modelUrl} />
+      <React.Suspense fallback={<CapsuleAvatar color={color} />}>
+        <GLBModel modelUrl={modelUrl} />
+      </React.Suspense>
     </ErrorBoundaryModel>
   )
 }

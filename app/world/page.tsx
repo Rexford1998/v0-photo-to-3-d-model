@@ -12,7 +12,9 @@ import dynamic from "next/dynamic"
 
 const WorldScene = dynamic(() => import("@/components/world-scene"), { ssr: false })
 
-export default function WorldPage() {
+import { Suspense } from "react"
+
+function WorldPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const modelUrl = searchParams.get("modelUrl")
@@ -33,6 +35,9 @@ export default function WorldPage() {
     sendMessage,
     leaveWorld,
   } = useMultiplayerWorld(modelUrl || "")
+
+  // Debug logging
+  console.log("[v0] World page - modelUrl:", modelUrl ? "set" : "null", "| isConnected:", isConnected, "| error:", hookError)
 
   if (!modelUrl) {
     return (
@@ -136,7 +141,9 @@ export default function WorldPage() {
     <main className="min-h-screen bg-background flex">
       {/* 3D Canvas */}
       <div className="flex-1">
-        <WorldScene players={players} localPlayerId={playerId} modelUrl={modelUrl} onPositionChange={updatePosition} />
+        <Suspense fallback={<div className="flex items-center justify-center h-full w-full">Loading 3D world...</div>}>
+          <WorldScene players={players} localPlayerId={playerId} modelUrl={modelUrl} onPositionChange={updatePosition} />
+        </Suspense>
       </div>
 
       {/* UI Panel */}
@@ -211,5 +218,13 @@ export default function WorldPage() {
         </div>
       </div>
     </main>
+  )
+}
+
+export default function WorldPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">Loading...</div>}>
+      <WorldPageContent />
+    </Suspense>
   )
 }
