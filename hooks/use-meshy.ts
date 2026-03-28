@@ -62,6 +62,54 @@ function getProxiedUrl(url: string): string {
   return `/api/proxy-model?url=${encodeURIComponent(url)}`
 }
 
+// Compress image to avoid 413 Payload Too Large errors
+// Vercel server actions have ~4.5MB limit, compress to stay under
+async function compressImage(dataUrl: string, maxSizeKB: number = 1500): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      let { width, height } = img
+      
+      // Scale down large images
+      const maxDimension = 1024
+      if (width > maxDimension || height > maxDimension) {
+        if (width > height) {
+          height = Math.round((height * maxDimension) / width)
+          width = maxDimension
+        } else {
+          width = Math.round((width * maxDimension) / height)
+          height = maxDimension
+        }
+      }
+      
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        reject(new Error('Failed to get canvas context'))
+        return
+      }
+      
+      ctx.drawImage(img, 0, 0, width, height)
+      
+      // Start with high quality and reduce until under size limit
+      let quality = 0.9
+      let result = canvas.toDataURL('image/jpeg', quality)
+      
+      while (result.length > maxSizeKB * 1024 && quality > 0.1) {
+        quality -= 0.1
+        result = canvas.toDataURL('image/jpeg', quality)
+      }
+      
+      console.log(`[v0] Image compressed: ${Math.round(result.length / 1024)}KB at quality ${quality.toFixed(1)}`)
+      resolve(result)
+    }
+    img.onerror = () => reject(new Error('Failed to load image for compression'))
+    img.src = dataUrl
+  })
+}
+
 export function useMeshy(): UseMeshyResult {
   const [stage, setStage] = useState<GenerationStage>("idle")
   const [currentStep, setCurrentStep] = useState(0)
@@ -154,13 +202,25 @@ export function useMeshy(): UseMeshyResult {
     const signal = abortControllerRef.current.signal
 
     try {
-      // Step 1: Start Image to 3D generation
-      setStage("generating")
+      // Step 1: Compress image to avoid 413 Payload Too Large errors
+      setStage("uploading")
       setCurrentStep(0)
+      setProgress(0)
+      
+      let compressedImage: string
+      try {
+        compressedImage = await compressImage(imageDataUrl)
+      } catch (compressError) {
+        console.error("[v0] Image compression failed:", compressError)
+        compressedImage = imageDataUrl // Fall back to original if compression fails
+      }
+
+      // Step 2: Start Image to 3D generation
+      setStage("generating")
       setProgress(0)
 
       // Use Server Action to bypass 4MB/1MB Route Handler body size limits
-      const taskId = await createImageTo3DTask(imageDataUrl)
+      const taskId = await createImageTo3DTask(compressedImage)
 
       // Poll for Image to 3D completion
       const task = await pollTask(taskId, signal)
