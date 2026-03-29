@@ -8,6 +8,7 @@ import { ArrowLeft, Send, Users, LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useMultiplayerWorld } from "@/hooks/useMultiplayerWorld"
+import { createClient } from "@/lib/supabase/client"
 import dynamic from "next/dynamic"
 
 const WorldScene = dynamic(() => import("@/components/world-scene"), { ssr: false })
@@ -22,6 +23,22 @@ function WorldPageContent() {
   const [color, setColor] = useState("#3b82f6")
   const [isJoining, setIsJoining] = useState(false)
   const [chatInput, setChatInput] = useState("")
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+
+  // Get the authenticated user
+  useEffect(() => {
+    const getUser = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user?.email) {
+        setUserEmail(user.email)
+        // Set default nickname from email (before @)
+        const defaultNickname = user.email.split('@')[0]
+        setNickname(defaultNickname)
+      }
+    }
+    getUser()
+  }, [])
 
   const {
     playerId,
@@ -35,9 +52,6 @@ function WorldPageContent() {
     sendMessage,
     leaveWorld,
   } = useMultiplayerWorld(modelUrl || "")
-
-  // Debug logging
-  console.log("[v0] World page - modelUrl:", modelUrl ? "set" : "null", "| isConnected:", isConnected, "| error:", hookError)
 
   if (!modelUrl) {
     return (
@@ -78,6 +92,12 @@ function WorldPageContent() {
     router.push("/")
   }
 
+  const handleLogout = async () => {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push("/")
+  }
+
   // Join form
   if (!isConnected) {
     return (
@@ -85,7 +105,9 @@ function WorldPageContent() {
         <div className="w-full max-w-md bg-card rounded-xl border border-border p-8 space-y-6 shadow-lg">
           <div>
             <h1 className="text-3xl font-bold">Join World</h1>
-            <p className="text-muted-foreground mt-2">Enter your nickname and join other players</p>
+            <p className="text-muted-foreground mt-2">
+              {userEmail ? `Logged in as ${userEmail}` : "Enter your nickname and join other players"}
+            </p>
           </div>
 
           {hookError && (
@@ -125,12 +147,17 @@ function WorldPageContent() {
             {isJoining ? "Joining..." : "Enter World"}
           </Button>
 
-          <Link href="/">
-            <Button variant="outline" className="w-full">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
+          <div className="flex gap-2">
+            <Link href="/" className="flex-1">
+              <Button variant="outline" className="w-full">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back
+              </Button>
+            </Link>
+            <Button variant="ghost" onClick={handleLogout} className="text-muted-foreground">
+              <LogOut className="h-4 w-4" />
             </Button>
-          </Link>
+          </div>
         </div>
       </main>
     )

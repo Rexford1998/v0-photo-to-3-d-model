@@ -258,10 +258,10 @@ function Scene({ players, localPlayerId, modelUrl, onPositionChange }: { players
       <directionalLight position={[15, 20, 10]} intensity={1.2} castShadow shadow-mapSize={[2048, 2048]} />
       <pointLight position={[-10, 10, -10]} intensity={0.5} />
 
-      {/* Ground */}
+      {/* Ground - Gray */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, 0, 0]}>
         <planeGeometry args={[100, 100]} />
-        <meshStandardMaterial color="#8B7355" />
+        <meshStandardMaterial color="#6b7280" />
       </mesh>
 
       {/* Players */}
@@ -273,8 +273,8 @@ function Scene({ players, localPlayerId, modelUrl, onPositionChange }: { players
         )
       ))}
 
-      {/* Environment */}
-      <color attach="background" args={["#87CEEB"]} />
+      {/* Environment - White sky */}
+      <color attach="background" args={["#ffffff"]} />
 
       {/* Camera */}
       <PerspectiveCamera ref={cameraRef} makeDefault position={[0, 2, 5]} fov={50} />

@@ -62,6 +62,54 @@ function getProxiedUrl(url: string): string {
   return `/api/proxy-model?url=${encodeURIComponent(url)}`
 }
 
+// Compress image to avoid 413 Payload Too Large errors
+// Vercel server actions have ~4.5MB limit, compress to stay under
+async function compressImage(dataUrl: string, maxSizeKB: number = 1500): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      let { width, height } = img
+      
+      // Scale down large images
+      const maxDimension = 1024
+      if (width > maxDimension || height > maxDimension) {
+        if (width > height) {
+          height = Math.round((height * maxDimension) / width)
+          width = maxDimension
+        } else {
+          width = Math.round((width * maxDimension) / height)
+          height = maxDimension
+        }
+      }
+      
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        reject(new Error('Failed to get canvas context'))
+        return
+      }
+      
+      ctx.drawImage(img, 0, 0, width, height)
+      
+      // Start with high quality and reduce until under size limit
+      let quality = 0.9
+      let result = canvas.toDataURL('image/jpeg', quality)
+      
+      while (result.length > maxSizeKB * 1024 && quality > 0.1) {
+        quality -= 0.1
+        result = canvas.toDataURL('image/jpeg', quality)
+      }
+      
+      console.log(`[v0] Image compressed: ${Math.round(result.length / 1024)}KB at quality ${quality.toFixed(1)}`)
+      resolve(result)
+    }
+    img.onerror = () => reject(new Error('Failed to load image for compression'))
+    img.src = dataUrl
+  })
+}
+
 export function useMeshy(): UseMeshyResult {
   const [stage, setStage] = useState<GenerationStage>("idle")
   const [currentStep, setCurrentStep] = useState(0)
@@ -154,13 +202,25 @@ export function useMeshy(): UseMeshyResult {
     const signal = abortControllerRef.current.signal
 
     try {
-      // Step 1: Start Image to 3D generation
-      setStage("generating")
+      // Step 1: Compress image to avoid 413 Payload Too Large errors
+      setStage("uploading")
       setCurrentStep(0)
+      setProgress(0)
+      
+      let compressedImage: string
+      try {
+        compressedImage = await compressImage(imageDataUrl)
+      } catch (compressError) {
+        console.error("[v0] Image compression failed:", compressError)
+        compressedImage = imageDataUrl // Fall back to original if compression fails
+      }
+
+      // Step 2: Start Image to 3D generation
+      setStage("generating")
       setProgress(0)
 
       // Use Server Action to bypass 4MB/1MB Route Handler body size limits
-      const taskId = await createImageTo3DTask(imageDataUrl)
+      const taskId = await createImageTo3DTask(compressedImage)
 
       // Poll for Image to 3D completion
       const task = await pollTask(taskId, signal)
@@ -170,26 +230,23 @@ export function useMeshy(): UseMeshyResult {
       }
 
       const generatedModelUrl = task.model_urls.glb
-      console.log("[v0] Generated model URL:", generatedModelUrl)
       setModelUrl(getProxiedUrl(generatedModelUrl))
 
-      // Step 2: Start rigging to get walking animation
+      // Step 2: Attempt rigging for walking animation (optional - many models won't be riggable)
+      // Rigging requires a humanoid model with clear body pose - photo-based models often fail
       setStage("rigging")
       setCurrentStep(1)
       setProgress(0)
 
-      let riggingTaskId: string | null = null
-      
-      // Ensure the model URL is valid and accessible
+      // Skip rigging if URL is invalid
       if (!generatedModelUrl || !generatedModelUrl.startsWith("http")) {
-        console.warn("[v0] Invalid model URL for rigging:", generatedModelUrl)
         setStage("complete")
         setCurrentStep(2)
         return
       }
       
+      // Try rigging but don't fail the whole process if it doesn't work
       try {
-        console.log("[v0] Starting rigging with URL:", generatedModelUrl)
         const riggingResponse = await fetch("/api/meshy/rigging", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -197,43 +254,24 @@ export function useMeshy(): UseMeshyResult {
           signal,
         })
 
-        if (!riggingResponse.ok) {
-          // If rigging fails, still show the static model
-          console.warn("Rigging failed, showing static model")
-          setStage("complete")
-          setCurrentStep(2)
-          return
+        if (riggingResponse.ok) {
+          const riggingData = await riggingResponse.json()
+          
+          if (riggingData.taskId) {
+            // Poll for rigging completion
+            const riggingTask = await pollRiggingTask(riggingData.taskId, signal)
+
+            // Set the walking animation URL if available
+            if (riggingTask.result?.basic_animations?.walking_glb_url) {
+              setAnimationUrl(getProxiedUrl(riggingTask.result.basic_animations.walking_glb_url))
+            } else if (riggingTask.result?.rigged_character_glb_url) {
+              setAnimationUrl(getProxiedUrl(riggingTask.result.rigged_character_glb_url))
+            }
+          }
         }
-
-        const riggingData = await riggingResponse.json()
-        riggingTaskId = riggingData.taskId
-      } catch (riggingErr) {
-        console.warn("Rigging request failed, showing static model:", riggingErr)
-        setStage("complete")
-        setCurrentStep(2)
-        return
-      }
-
-      if (!riggingTaskId) {
-        console.warn("No rigging task ID, showing static model")
-        setStage("complete")
-        setCurrentStep(2)
-        return
-      }
-
-      // Poll for rigging completion
-      try {
-        const riggingTask = await pollRiggingTask(riggingTaskId, signal)
-
-        // Set the walking animation URL if available
-        if (riggingTask.result?.basic_animations?.walking_glb_url) {
-          setAnimationUrl(getProxiedUrl(riggingTask.result.basic_animations.walking_glb_url))
-        } else if (riggingTask.result?.rigged_character_glb_url) {
-          // Use rigged character if no walking animation
-          setAnimationUrl(getProxiedUrl(riggingTask.result.rigged_character_glb_url))
-        }
-      } catch (pollErr) {
-        console.warn("Rigging poll failed, showing static model:", pollErr)
+        // If rigging fails for any reason, we just continue without animation
+      } catch {
+        // Rigging is optional - silently continue without animation
       }
 
       setStage("complete")
