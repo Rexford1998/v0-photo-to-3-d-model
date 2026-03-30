@@ -36,8 +36,10 @@ function LoginForm() {
         password,
       })
       if (error) throw error
-      router.refresh()
-      router.push(returnTo)
+      
+      // Use window.location for a full page navigation to ensure auth cookies are set
+      console.log("[v0] Login successful, redirecting to:", returnTo)
+      window.location.href = returnTo
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : 'An error occurred')
     } finally {
