@@ -2,7 +2,6 @@
 
 // Meshy API Hook - Build: 2026-03-25-v4
 import { useState, useCallback, useRef } from "react"
-import { createImageTo3DTask } from "@/actions/meshy"
 
 interface MeshyTask {
   id: string
@@ -48,6 +47,7 @@ interface UseMeshyResult {
   progress: number
   modelUrl: string | null
   animationUrl: string | null
+  rigTaskId: string | null
   error: string | null
   generateModel: (imageDataUrl: string) => Promise<void>
   reset: () => void
@@ -221,8 +221,23 @@ export function useMeshy(): UseMeshyResult {
       setStage("generating")
       setProgress(0)
 
-      // Use Server Action to bypass 4MB/1MB Route Handler body size limits
-      const taskId = await createImageTo3DTask(compressedImage)
+      const createTaskResponse = await fetch("/api/meshy/image-to-3d", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageUrl: compressedImage }),
+        signal,
+      })
+
+      if (!createTaskResponse.ok) {
+        const errorData = await createTaskResponse.json().catch(() => null)
+        throw new Error(errorData?.error || "Failed to start image-to-3d task")
+      }
+
+      const createTaskData = await createTaskResponse.json()
+      const taskId = createTaskData.taskId as string
+      if (!taskId) {
+        throw new Error("Image-to-3d task did not return a task ID")
+      }
 
       // Poll for Image to 3D completion
       const task = await pollTask(taskId, signal)
