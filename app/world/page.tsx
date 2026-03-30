@@ -81,17 +81,27 @@ function WorldPageContent() {
   const [rigTaskId, setRigTaskId] = useState<string | null>(null)
   const [activeAnimationUrl, setActiveAnimationUrl] = useState<string | null>(null)
 
-  // Extract rig task ID from model URL
+  // Load rig task ID from user's player data
   useEffect(() => {
-    if (modelUrl) {
-      // The model URL might contain the rig task ID or we need to extract it
-      // For rigged models from Meshy, the URL pattern includes the task ID
-      const match = modelUrl.match(/tasks\/([a-f0-9-]+)\//)
-      if (match) {
-        setRigTaskId(match[1])
+    const loadRigTaskId = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (user) {
+        const { data: playerData } = await supabase
+          .from('players')
+          .select('rig_task_id')
+          .eq('user_id', user.id)
+          .single()
+        
+        if (playerData?.rig_task_id) {
+          setRigTaskId(playerData.rig_task_id)
+        }
       }
     }
-  }, [modelUrl])
+    
+    loadRigTaskId()
+  }, [])
 
   // Load available animations from the model
   useEffect(() => {

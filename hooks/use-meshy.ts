@@ -116,6 +116,7 @@ export function useMeshy(): UseMeshyResult {
   const [progress, setProgress] = useState(0)
   const [modelUrl, setModelUrl] = useState<string | null>(null)
   const [animationUrl, setAnimationUrl] = useState<string | null>(null)
+  const [rigTaskId, setRigTaskId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
 
@@ -128,6 +129,7 @@ export function useMeshy(): UseMeshyResult {
     setProgress(0)
     setModelUrl(null)
     setAnimationUrl(null)
+    setRigTaskId(null)
     setError(null)
   }, [])
 
@@ -261,6 +263,9 @@ export function useMeshy(): UseMeshyResult {
             // Poll for rigging completion
             const riggingTask = await pollRiggingTask(riggingData.taskId, signal)
 
+            // Store the rig task ID for animation generation
+            setRigTaskId(riggingData.taskId)
+
             // Set the walking animation URL if available
             if (riggingTask.result?.basic_animations?.walking_glb_url) {
               setAnimationUrl(getProxiedUrl(riggingTask.result.basic_animations.walking_glb_url))
@@ -293,6 +298,7 @@ export function useMeshy(): UseMeshyResult {
     progress,
     modelUrl,
     animationUrl,
+    rigTaskId,
     error,
     generateModel,
     reset,
