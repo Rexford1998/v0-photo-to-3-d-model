@@ -79,7 +79,7 @@ function HomeContent() {
           .from('user_characters')
           .select('model_url, nickname')
           .eq('user_id', user.id)
-          .single()
+          .maybeSingle()
         
         if (data) {
           setSavedCharacter(data)
@@ -97,7 +97,7 @@ function HomeContent() {
           .from('user_characters')
           .select('model_url, nickname')
           .eq('user_id', session.user.id)
-          .single()
+          .maybeSingle()
         setSavedCharacter(data || null)
       } else {
         setSavedCharacter(null)
