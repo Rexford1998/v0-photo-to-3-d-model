@@ -2,6 +2,27 @@ import { NextRequest, NextResponse } from "next/server"
 
 const MESHY_API_KEY = process.env.MESHY_API_KEY
 
+function getMeshyErrorMessage(status: number, errorText: string) {
+  let providerMessage = ""
+
+  try {
+    const parsed = JSON.parse(errorText)
+    providerMessage = parsed?.message || parsed?.error || parsed?.detail || ""
+  } catch {
+    providerMessage = errorText
+  }
+
+  if (status === 402) {
+    return "Meshy Animation API returned 402 (Payment Required). Animation generation needs Meshy credits. Add credits at meshy.ai and retry."
+  }
+
+  if (providerMessage) {
+    return `Meshy Animation API error (${status}): ${providerMessage}`
+  }
+
+  return `Meshy Animation API error: ${status}`
+}
+
 // Popular animations from Meshy's library
 export const ANIMATION_LIBRARY = [
   { id: 0, name: "Idle", category: "DailyActions" },
@@ -74,10 +95,10 @@ export async function POST(request: NextRequest) {
     })
 
     if (!response.ok) {
-      const error = await response.text()
-      console.error("Meshy Animation API error:", error)
+      const errorText = await response.text()
+      console.error("Meshy Animation API error:", errorText)
       return NextResponse.json(
-        { error: `Meshy Animation API error: ${response.status}` },
+        { error: getMeshyErrorMessage(response.status, errorText) },
         { status: response.status }
       )
     }

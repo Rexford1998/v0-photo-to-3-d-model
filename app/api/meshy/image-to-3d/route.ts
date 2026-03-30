@@ -2,6 +2,27 @@ import { NextRequest, NextResponse } from "next/server"
 
 const MESHY_API_KEY = process.env.MESHY_API_KEY
 
+function getMeshyErrorMessage(status: number, errorText: string) {
+  let providerMessage = ""
+
+  try {
+    const parsed = JSON.parse(errorText)
+    providerMessage = parsed?.message || parsed?.error || parsed?.detail || ""
+  } catch {
+    providerMessage = errorText
+  }
+
+  if (status === 402) {
+    return "Meshy API returned 402 (Payment Required). Your account may be out of credits. Add funds or upgrade your plan at meshy.ai, then retry."
+  }
+
+  if (providerMessage) {
+    return `Meshy API error (${status}): ${providerMessage}`
+  }
+
+  return `Meshy API error: ${status}`
+}
+
 export async function POST(request: NextRequest) {
   if (!MESHY_API_KEY) {
     return NextResponse.json(
@@ -40,10 +61,10 @@ export async function POST(request: NextRequest) {
     })
 
     if (!response.ok) {
-      const error = await response.text()
-      console.error("Meshy image-to-3d API error:", error)
+      const errorText = await response.text()
+      console.error("Meshy image-to-3d API error:", errorText)
       return NextResponse.json(
-        { error: `Meshy API error: ${response.status}` },
+        { error: getMeshyErrorMessage(response.status, errorText) },
         { status: response.status }
       )
     }
