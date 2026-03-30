@@ -343,6 +343,7 @@ function WorldPageContent() {
           <p className="text-xs text-muted-foreground">
             Use Arrow Keys to move{joinedCountry ? ` • Location: ${joinedCountry}` : ""}
           </p>
+          <p className="text-xs text-muted-foreground">Use Arrow Keys to move</p>
           
           {/* Animation Selector */}
           {availableAnimations.length > 0 && (
