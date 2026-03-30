@@ -70,9 +70,7 @@ function HomeContent() {
     const supabase = createClient()
     
     const checkUser = async () => {
-      console.log("[v0] Checking user auth state...")
-      const { data: { user }, error } = await supabase.auth.getUser()
-      console.log("[v0] getUser result - user:", user?.email || "null", "error:", error?.message || "none")
+      const { data: { user } } = await supabase.auth.getUser()
       setUser(user)
       
       if (user) {
@@ -93,7 +91,6 @@ function HomeContent() {
     
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("[v0] Auth state changed - event:", event, "user:", session?.user?.email || "null")
       setUser(session?.user || null)
       if (session?.user) {
         const { data } = await supabase
@@ -342,13 +339,13 @@ function HomeContent() {
                       <p className="text-sm text-muted-foreground">Sign up or log in to join the multiplayer world with your character</p>
                     </div>
                     <div className="flex gap-3">
-                      <Link href={`/auth/login?returnTo=${encodeURIComponent("/world?modelUrl=" + encodeURIComponent(modelUrl))}`} className="flex-1">
+                      <Link href={`/auth/login?returnTo=${encodeURIComponent("/?modelUrl=" + encodeURIComponent(modelUrl))}`} className="flex-1">
                         <Button variant="outline" className="w-full">
                           <LogIn className="mr-2 h-4 w-4" />
                           Log In
                         </Button>
                       </Link>
-                      <Link href={`/auth/sign-up?returnTo=${encodeURIComponent("/world?modelUrl=" + encodeURIComponent(modelUrl))}`} className="flex-1">
+                      <Link href={`/auth/sign-up?returnTo=${encodeURIComponent("/?modelUrl=" + encodeURIComponent(modelUrl))}`} className="flex-1">
                         <Button className="w-full">
                           <UserPlus className="mr-2 h-4 w-4" />
                           Sign Up

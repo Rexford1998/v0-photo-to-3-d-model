@@ -26,24 +26,15 @@ function LoginForm() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log("[v0] Login form submitted")
-    console.log("[v0] Email:", email)
-    console.log("[v0] returnTo param:", returnTo)
-    
     const supabase = createClient()
     setIsLoading(true)
     setError(null)
 
     try {
-      console.log("[v0] Calling supabase.auth.signInWithPassword...")
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
-      
-      console.log("[v0] Auth response - error:", error)
-      console.log("[v0] Auth response - session:", data?.session ? "exists" : "null")
-      console.log("[v0] Auth response - user:", data?.user?.email || "null")
       
       if (error) throw error
       
@@ -52,29 +43,19 @@ function LoginForm() {
       }
       
       // Wait a moment for cookies to be set by @supabase/ssr
-      console.log("[v0] Waiting for session cookies to be set...")
       await new Promise(resolve => setTimeout(resolve, 500))
-      
-      // Verify session is persisted
-      const { data: { session: verifiedSession } } = await supabase.auth.getSession()
-      console.log("[v0] Verified session:", verifiedSession ? "exists" : "null")
       
       // Decode the returnTo URL in case it was double-encoded
       let decodedReturnTo = returnTo
       try {
         decodedReturnTo = decodeURIComponent(returnTo)
       } catch {
-        console.log("[v0] Could not decode returnTo, using as-is")
+        // Use as-is if decoding fails
       }
-      
-      console.log("[v0] Login successful!")
-      console.log("[v0] Decoded returnTo:", decodedReturnTo)
-      console.log("[v0] Redirecting now...")
       
       // Use window.location for a full page navigation to ensure auth cookies are set
       window.location.href = decodedReturnTo
     } catch (error: unknown) {
-      console.log("[v0] Login error:", error)
       setError(error instanceof Error ? error.message : 'An error occurred')
     } finally {
       setIsLoading(false)
