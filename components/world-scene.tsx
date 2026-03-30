@@ -253,14 +253,15 @@ function Scene({ players, localPlayerId, modelUrl, onPositionChange }: { players
 
   return (
     <>
-      {/* Lighting - simplified for performance */}
-      <ambientLight intensity={1} />
-      <directionalLight position={[15, 20, 10]} intensity={0.8} castShadow shadow-mapSize={[512, 512]} />
+      {/* Lighting */}
+      <ambientLight intensity={0.8} />
+      <directionalLight position={[15, 20, 10]} intensity={1.2} castShadow shadow-mapSize={[2048, 2048]} />
+      <pointLight position={[-10, 10, -10]} intensity={0.5} />
 
-      {/* Ground - Gray */}
+      {/* Ground */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, 0, 0]}>
         <planeGeometry args={[100, 100]} />
-        <meshStandardMaterial color="#6b7280" />
+        <meshStandardMaterial color="#8B7355" />
       </mesh>
 
       {/* Players */}
@@ -272,8 +273,8 @@ function Scene({ players, localPlayerId, modelUrl, onPositionChange }: { players
         )
       ))}
 
-      {/* Environment - White sky */}
-      <color attach="background" args={["#ffffff"]} />
+      {/* Environment */}
+      <color attach="background" args={["#87CEEB"]} />
 
       {/* Camera */}
       <PerspectiveCamera ref={cameraRef} makeDefault position={[0, 2, 5]} fov={50} />
@@ -291,26 +292,7 @@ interface WorldSceneProps {
 export default function WorldScene({ players, localPlayerId, modelUrl, onPositionChange }: WorldSceneProps) {
   return (
     <div className="w-full h-screen">
-      <Canvas 
-        shadows="basic"
-        gl={{ 
-          antialias: true,
-          powerPreference: "default",
-          preserveDrawingBuffer: false,
-          failIfMajorPerformanceCaveat: false
-        }}
-        onCreated={({ gl }) => {
-          // Handle context loss gracefully
-          const canvas = gl.domElement
-          canvas.addEventListener('webglcontextlost', (e) => {
-            e.preventDefault()
-            console.log('[v0] WebGL context lost, will restore')
-          })
-          canvas.addEventListener('webglcontextrestored', () => {
-            console.log('[v0] WebGL context restored')
-          })
-        }}
-      >
+      <Canvas shadows>
         <Scene players={players} localPlayerId={localPlayerId} modelUrl={modelUrl} onPositionChange={onPositionChange} />
       </Canvas>
     </div>
