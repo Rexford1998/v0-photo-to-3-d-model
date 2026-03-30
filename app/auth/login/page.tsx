@@ -38,8 +38,10 @@ function LoginForm() {
       if (error) throw error
       
       // Use window.location for a full page navigation to ensure auth cookies are set
-      console.log("[v0] Login successful, redirecting to:", returnTo)
-      window.location.href = returnTo
+      // Decode the returnTo URL in case it was double-encoded
+      const decodedReturnTo = decodeURIComponent(returnTo)
+      console.log("[v0] Login successful, redirecting to:", decodedReturnTo)
+      window.location.href = decodedReturnTo
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : 'An error occurred')
     } finally {

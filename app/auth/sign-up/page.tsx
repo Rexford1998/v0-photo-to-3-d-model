@@ -56,12 +56,14 @@ function SignUpForm() {
       if (error) throw error
       
       // If session exists (email confirmation disabled), redirect to returnTo
+      // Decode the returnTo URL in case it was double-encoded
+      const decodedReturnTo = decodeURIComponent(returnTo)
       if (data.session) {
-        console.log("[v0] Signup successful with session, redirecting to:", returnTo)
-        window.location.href = returnTo
+        console.log("[v0] Signup successful with session, redirecting to:", decodedReturnTo)
+        window.location.href = decodedReturnTo
       } else {
         // Need email confirmation - redirect to success page with returnTo
-        window.location.href = `/auth/sign-up-success?returnTo=${encodeURIComponent(returnTo)}`
+        window.location.href = `/auth/sign-up-success?returnTo=${encodeURIComponent(decodedReturnTo)}`
       }
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : 'An error occurred')
