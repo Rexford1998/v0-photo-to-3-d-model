@@ -62,7 +62,9 @@ function GLBModel({ modelUrl, isMoving }: { modelUrl: string; isMoving?: boolean
     const size = box.getSize(new THREE.Vector3())
     const height = size.y || 1
     const targetHeight = 1.5
-    const scale = targetHeight / height
+    // Clamp scale between 0.005 and 5 to handle both tiny and huge models
+    const rawScale = targetHeight / height
+    const scale = Math.max(0.005, Math.min(rawScale, 5))
     cloned.scale.setScalar(scale)
     
     // Center the model
