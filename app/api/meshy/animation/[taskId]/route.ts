@@ -38,14 +38,10 @@ export async function GET(
     
     console.log("[v0] Full Meshy animation response:", JSON.stringify(data, null, 2))
     
-    // Try all possible locations for the GLB URL in Meshy's response
+    // Meshy Animation API returns URL in result.animation_glb_url
     const modelUrl = 
-      data.result?.glb_url || 
-      data.result?.fbx_url ||
-      data.glb_url ||
-      data.output?.glb_url ||
-      data.model_urls?.glb ||
-      data.output ||
+      data.result?.animation_glb_url || 
+      data.result?.animation_fbx_url ||
       null
     
     return NextResponse.json({
@@ -53,8 +49,6 @@ export async function GET(
       progress: data.progress || 0,
       modelUrl: modelUrl,
       error: data.task_error?.message || null,
-      // Include raw response for debugging
-      _debug_raw: data,
     })
   } catch (error) {
     console.error("Error checking animation status:", error)
