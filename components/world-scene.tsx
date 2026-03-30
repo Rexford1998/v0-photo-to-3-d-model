@@ -95,11 +95,17 @@ function GLBModel({ modelUrl, isMoving }: { modelUrl: string; isMoving?: boolean
       groupRef.current.remove(groupRef.current.children[0])
     }
     
-    // Scale and center the model
+    // Reset any existing transforms on the clone
+    clone.scale.set(1, 1, 1)
+    clone.position.set(0, 0, 0)
+    
+    // Calculate scale based on HEIGHT only (more consistent for humanoid models)
+    // Target height is 1.5 units (average player height in world)
     const box = new THREE.Box3().setFromObject(clone)
     const size = box.getSize(new THREE.Vector3())
-    const maxDim = Math.max(size.x, size.y, size.z)
-    const scale = 1.5 / maxDim
+    const height = size.y
+    const targetHeight = 1.5
+    const scale = targetHeight / height
     clone.scale.setScalar(scale)
     
     // Recalculate bounds after scaling
