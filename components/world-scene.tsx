@@ -10,6 +10,7 @@ interface Player {
   id: string
   nickname: string
   model_url?: string
+  animation_url?: string
   position_x: number
   position_y: number
   position_z: number
@@ -191,9 +192,12 @@ function OtherPlayerCharacter({ player }: { player: Player }) {
     }
   })
 
+  // Use animation_url if available, otherwise fall back to model_url
+  const displayModelUrl = player.animation_url || player.model_url
+
   return (
     <group ref={groupRef} position={[player.position_x, player.position_y, player.position_z]}>
-      <PlayerModel modelUrl={player.model_url} color={player.color} />
+      <PlayerModel modelUrl={displayModelUrl} color={player.color} />
 
       {/* Name label */}
       <Html position={[0, 1.8, 0]} center>

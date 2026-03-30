@@ -153,6 +153,7 @@ function WorldPageContent() {
     onlineCount,
     joinWorld,
     updatePosition,
+    updateAnimation,
     sendMessage,
     leaveWorld,
   } = useMultiplayerWorld(modelUrl || "")
@@ -325,8 +326,9 @@ function WorldPageContent() {
             }
             setGeneratedAnimations(prev => [...prev.filter(a => a.id !== actionId), newAnim])
             
-            // Set as active animation
+            // Set as active animation and broadcast to other players
             setActiveAnimationUrl(status.modelUrl)
+            updateAnimation(status.modelUrl)
           } else if (status.status === "FAILED") {
             console.error("[v0] Animation failed:", status.error)
             clearInterval(pollInterval)
@@ -517,7 +519,10 @@ function WorldPageContent() {
                   {generatedAnimations.map((anim) => (
                     <button
                       key={anim.id}
-                      onClick={() => setActiveAnimationUrl(anim.modelUrl)}
+                      onClick={() => {
+                        setActiveAnimationUrl(anim.modelUrl)
+                        updateAnimation(anim.modelUrl)
+                      }}
                       className={`w-full p-2 rounded-lg text-left text-sm flex items-center gap-2 transition-colors ${
                         activeAnimationUrl === anim.modelUrl 
                           ? "bg-primary text-primary-foreground" 
