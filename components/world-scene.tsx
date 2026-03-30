@@ -45,78 +45,81 @@ function CapsuleAvatar({ color }: { color: string }) {
 // GLB Model loader component with animation support
 function GLBModel({ modelUrl, isMoving }: { modelUrl: string; isMoving?: boolean }) {
   const groupRef = useRef<THREE.Group>(null)
-  const cloneRef = useRef<THREE.Group | null>(null)
   const proxiedUrl = getProxiedUrl(modelUrl)
   const { scene, animations } = useGLTF(proxiedUrl)
   
-  // Clone scene to avoid mutation issues - store in ref for animation binding
-  const clone = useMemo(() => {
+  // Clone and scale the scene, memoized per scene change
+  const scaledClone = useMemo(() => {
     const cloned = SkeletonUtils.clone(scene)
-    cloneRef.current = cloned
+    
+    // Reset transforms
+    cloned.scale.set(1, 1, 1)
+    cloned.position.set(0, 0, 0)
+    cloned.rotation.set(0, 0, 0)
+    
+    // Calculate scale based on HEIGHT - target 1.5 units for humanoids
+    const box = new THREE.Box3().setFromObject(cloned)
+    const size = box.getSize(new THREE.Vector3())
+    const height = size.y || 1
+    const targetHeight = 1.5
+    const scale = Math.min(targetHeight / height, 0.02) // Cap scale to prevent giant models
+    cloned.scale.setScalar(scale)
+    
+    // Center the model
+    const newBox = new THREE.Box3().setFromObject(cloned)
+    const center = newBox.getCenter(new THREE.Vector3())
+    cloned.position.y = -newBox.min.y
+    cloned.position.x = -center.x
+    cloned.position.z = -center.z
+    
     return cloned
   }, [scene])
   
-  // Bind animations to the cloned scene (not groupRef) so bones are found
-  const { actions, names } = useAnimations(animations, cloneRef)
+  // Bind animations directly to the scaled clone
+  const { actions, names } = useAnimations(animations, scaledClone)
   
-  // Auto-play the first animation when model loads (Meshy bakes animation into the GLB)
+  // Auto-play the first animation when model loads
   useEffect(() => {
-    if (!actions || names.length === 0) {
-      return
-    }
+    if (!actions || names.length === 0) return
     
-    // Play the first animation (Meshy models have one baked animation)
     const animationToPlay = names[0]
-    
     if (animationToPlay && actions[animationToPlay]) {
       const action = actions[animationToPlay]
       action?.reset().fadeIn(0.3).play()
-      // Always play at full speed - animation is already baked
       action!.timeScale = 1
     }
   }, [actions, names])
   
-  // Optionally adjust speed based on movement (for walk animations)
+  // Adjust animation speed based on movement
   useFrame(() => {
     if (actions && names.length > 0 && names[0] && actions[names[0]]) {
       const action = actions[names[0]]
       if (action && isMoving !== undefined) {
-        // Slow down when not moving, speed up when moving
         action.timeScale = THREE.MathUtils.lerp(action.timeScale, isMoving ? 1.2 : 0.3, 0.1)
       }
     }
   })
   
+  // Add scaled clone to group when ready
   useEffect(() => {
-    if (!groupRef.current || !clone) return
+    if (!groupRef.current || !scaledClone) return
     
-    // Clear any existing children
+    // Clear existing children
     while (groupRef.current.children.length > 0) {
       groupRef.current.remove(groupRef.current.children[0])
     }
     
-    // Reset any existing transforms on the clone
-    clone.scale.set(1, 1, 1)
-    clone.position.set(0, 0, 0)
+    groupRef.current.add(scaledClone)
     
-    // Calculate scale based on HEIGHT only (more consistent for humanoid models)
-    // Target height is 1.5 units (average player height in world)
-    const box = new THREE.Box3().setFromObject(clone)
-    const size = box.getSize(new THREE.Vector3())
-    const height = size.y
-    const targetHeight = 1.5
-    const scale = targetHeight / height
-    clone.scale.setScalar(scale)
-    
-    // Recalculate bounds after scaling
-    const newBox = new THREE.Box3().setFromObject(clone)
-    const center = newBox.getCenter(new THREE.Vector3())
-    clone.position.y = -newBox.min.y
-    clone.position.x = -center.x
-    clone.position.z = -center.z
-    
-    groupRef.current.add(clone)
-  }, [clone])
+    return () => {
+      // Cleanup on unmount
+      if (groupRef.current) {
+        while (groupRef.current.children.length > 0) {
+          groupRef.current.remove(groupRef.current.children[0])
+        }
+      }
+    }
+  }, [scaledClone])
 
   return <group ref={groupRef} />
 }
