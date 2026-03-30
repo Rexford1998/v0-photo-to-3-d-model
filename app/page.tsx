@@ -5,6 +5,7 @@ import { useState, useEffect } from "react"
 import dynamic from "next/dynamic"
 import { ImageUpload } from "@/components/image-upload"
 import { ModelUpload } from "@/components/model-upload"
+import { AnimationGenerator } from "@/components/animation-generator"
 import { ProgressSteps } from "@/components/progress-steps"
 import { useMeshy } from "@/hooks/use-meshy"
 import { Button } from "@/components/ui/button"
@@ -343,9 +344,14 @@ export default function Home() {
               <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-accent/10 p-3 text-sm text-accent mt-4">
                 <div className="flex items-center gap-2">
                   <Play className="h-4 w-4" />
-                  <strong>Walking mode active:</strong> Click inside the 3D viewer, then use WASD to move and Mouse to look around.
+                  <strong>Walking animation included!</strong> Your character comes with a walking animation.
                 </div>
               </div>
+            )}
+
+            {/* Animation Generation Section - shown after model is ready */}
+            {displayModelUrl && rigTaskId && user && (
+              <AnimationGenerator rigTaskId={rigTaskId} userId={user.id} />
             )}
 
             {displayModelUrl && (

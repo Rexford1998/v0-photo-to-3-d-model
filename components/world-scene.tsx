@@ -49,37 +49,28 @@ function GLBModel({ modelUrl, isMoving }: { modelUrl: string; isMoving?: boolean
   const proxiedUrl = getProxiedUrl(modelUrl)
   const { scene, animations } = useGLTF(proxiedUrl)
   
-  // Check if this is a Meshy animation URL (they use a different scale)
-  const isMeshyAnimation = modelUrl.includes('assets.meshy.ai') && modelUrl.includes('animation')
-  
   // Clone and scale the scene, memoized per scene change
   const scaledClone = useMemo(() => {
     const cloned = SkeletonUtils.clone(scene)
     
-    // Reset transforms
+    // Reset transforms completely
     cloned.scale.set(1, 1, 1)
     cloned.position.set(0, 0, 0)
     cloned.rotation.set(0, 0, 0)
     
-    // Calculate scale based on HEIGHT - target 1.5 units for humanoids
+    // Calculate bounding box to get actual model dimensions
     const box = new THREE.Box3().setFromObject(cloned)
     const size = box.getSize(new THREE.Vector3())
-    const height = size.y || 1
-    const targetHeight = 1.5
     
-    let scale: number
-    if (isMeshyAnimation) {
-      // Meshy animated models are typically in centimeters (100x larger)
-      // Use a fixed scale that matches the original model
-      scale = 0.015
-    } else {
-      // Regular models - calculate based on height
-      const rawScale = targetHeight / height
-      scale = Math.max(0.005, Math.min(rawScale, 5))
-    }
+    // Use the MAXIMUM dimension to normalize all models consistently
+    // This ensures both small and large models scale to the same visible size
+    const maxDim = Math.max(size.x, size.y, size.z) || 1
+    const targetSize = 1.5 // Target max dimension in world units
+    const scale = targetSize / maxDim
+    
     cloned.scale.setScalar(scale)
     
-    // Center the model
+    // Center the model after scaling
     const newBox = new THREE.Box3().setFromObject(cloned)
     const center = newBox.getCenter(new THREE.Vector3())
     cloned.position.y = -newBox.min.y
@@ -87,7 +78,7 @@ function GLBModel({ modelUrl, isMoving }: { modelUrl: string; isMoving?: boolean
     cloned.position.z = -center.z
     
     return cloned
-  }, [scene, isMeshyAnimation])
+  }, [scene])
   
   // Bind animations directly to the scaled clone
   const { actions, names } = useAnimations(animations, scaledClone)

@@ -4,13 +4,12 @@
 import { useSearchParams, useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { ArrowLeft, Send, Users, LogOut, Play, Plus, Loader2, Check, ChevronDown, ChevronUp, RotateCcw } from "lucide-react"
+import { ArrowLeft, Send, Users, LogOut, Play, ChevronDown, ChevronUp, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Progress } from "@/components/ui/progress"
 
-// Animation library from Meshy
+// Animation library from Meshy (used for reference on home page)
 const ANIMATION_LIBRARY = [
   { id: 0, name: "Idle", category: "DailyActions" },
   { id: 1, name: "Walking", category: "WalkAndRun" },
@@ -71,37 +70,17 @@ function WorldPageContent() {
   const [color, setColor] = useState("#3b82f6")
   const [isJoining, setIsJoining] = useState(false)
   const [chatInput, setChatInput] = useState("")
-  const [currentAnimation, setCurrentAnimation] = useState<string>("")
-  const [availableAnimations, setAvailableAnimations] = useState<string[]>([])
   const [generatedAnimations, setGeneratedAnimations] = useState<GeneratedAnimation[]>([])
-  const [isGeneratingAnimation, setIsGeneratingAnimation] = useState(false)
-  const [animationProgress, setAnimationProgress] = useState(0)
-  const [selectedAnimationId, setSelectedAnimationId] = useState<number | null>(null)
   const [animationPanelOpen, setAnimationPanelOpen] = useState(false)
-  const [rigTaskId, setRigTaskId] = useState<string | null>(null)
   const [activeAnimationUrl, setActiveAnimationUrl] = useState<string | null>(null)
-  const [isRigging, setIsRigging] = useState(false)
-  const [riggingProgress, setRiggingProgress] = useState(0)
 
-  // Load rig task ID and saved animations from user's player data
+  // Load saved animations from user's player data
   useEffect(() => {
-    const loadUserData = async () => {
+    const loadAnimations = async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       
       if (user) {
-        // Load rig task ID
-        const { data: playerData } = await supabase
-          .from('players')
-          .select('rig_task_id')
-          .eq('user_id', user.id)
-          .single()
-        
-        if (playerData?.rig_task_id) {
-          setRigTaskId(playerData.rig_task_id)
-        }
-
-        // Load saved animations
         const { data: savedAnimations } = await supabase
           .from('player_animations')
           .select('animation_id, animation_name, animation_url')
@@ -117,7 +96,7 @@ function WorldPageContent() {
       }
     }
     
-    loadUserData()
+    loadAnimations()
   }, [])
 
   // Load available animations from the model
@@ -210,174 +189,6 @@ function WorldPageContent() {
   const handleLeaveWorld = async () => {
     await leaveWorld()
     router.push("/")
-  }
-
-  // Rig the existing model to enable animations
-  const rigExistingModel = async () => {
-    if (!modelUrl) {
-      console.log("[v0] No model URL provided")
-      return
-    }
-
-    console.log("[v0] Starting rig process for model:", modelUrl)
-    setIsRigging(true)
-    setRiggingProgress(0)
-
-    try {
-      // Extract the original model URL from the proxy URL
-      let originalModelUrl = modelUrl
-      if (modelUrl.includes('/api/proxy-model?url=')) {
-        const urlParam = new URL(modelUrl, window.location.origin).searchParams.get('url')
-        if (urlParam) originalModelUrl = urlParam
-      }
-
-      console.log("[v0] Original model URL for rigging:", originalModelUrl)
-
-      // Start rigging
-      const rigResponse = await fetch('/api/meshy/rigging', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ modelUrl: originalModelUrl }),
-      })
-
-      if (!rigResponse.ok) {
-        const error = await rigResponse.json()
-        throw new Error(error.error || 'Failed to start rigging')
-      }
-
-      const { taskId } = await rigResponse.json()
-      console.log("[v0] Rigging task started with ID:", taskId)
-
-      // Poll for completion
-      const pollInterval = setInterval(async () => {
-        try {
-          console.log("[v0] Polling rigging status for task:", taskId)
-          const statusResponse = await fetch(`/api/meshy/rigging/${taskId}`)
-          const status = await statusResponse.json()
-          console.log("[v0] Rigging status:", status)
-
-          setRiggingProgress(status.progress || 0)
-
-          if (status.status === 'SUCCEEDED') {
-            clearInterval(pollInterval)
-            setIsRigging(false)
-            setRigTaskId(taskId)
-
-            // Save the rig task ID to the database
-            const supabase = createClient()
-            const { data: { user } } = await supabase.auth.getUser()
-            if (user) {
-              await supabase
-                .from('players')
-                .update({ rig_task_id: taskId })
-                .eq('user_id', user.id)
-            }
-
-            alert('Model rigged successfully! You can now create animations.')
-          } else if (status.status === 'FAILED') {
-            clearInterval(pollInterval)
-            setIsRigging(false)
-            alert(`Rigging failed: ${status.error || 'Unknown error'}`)
-          }
-        } catch (err) {
-          console.error('Rigging poll error:', err)
-        }
-      }, 2000)
-    } catch (error) {
-      console.error('Rigging error:', error)
-      setIsRigging(false)
-      alert(error instanceof Error ? error.message : 'Failed to rig model')
-    }
-  }
-
-  // Generate animation from Meshy
-  const generateAnimation = async (actionId: number, animName: string) => {
-    if (!rigTaskId) {
-      alert("No rigged model found. Please generate a rigged model first.")
-      return
-    }
-
-    console.log("[v0] Starting animation generation:", { rigTaskId, actionId, animName })
-    setIsGeneratingAnimation(true)
-    setSelectedAnimationId(actionId)
-    setAnimationProgress(0)
-
-    try {
-      // Start animation generation
-      console.log("[v0] Creating animation task...")
-      const createResponse = await fetch("/api/meshy/animation", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rigTaskId, actionId }),
-      })
-
-      if (!createResponse.ok) {
-        const error = await createResponse.json()
-        console.error("[v0] Animation creation failed:", error)
-        throw new Error(error.error || "Failed to start animation")
-      }
-
-      const { taskId } = await createResponse.json()
-      console.log("[v0] Animation task created:", taskId)
-
-      // Poll for completion
-      const pollInterval = setInterval(async () => {
-        try {
-          const statusResponse = await fetch(`/api/meshy/animation/${taskId}`)
-          const status = await statusResponse.json()
-
-          setAnimationProgress(status.progress || 0)
-
-          if (status.status === "SUCCEEDED" && status.modelUrl) {
-            clearInterval(pollInterval)
-            setIsGeneratingAnimation(false)
-            setSelectedAnimationId(null)
-            
-            // Add to generated animations
-            const newAnim: GeneratedAnimation = {
-              id: actionId,
-              name: animName,
-              modelUrl: status.modelUrl,
-            }
-            setGeneratedAnimations(prev => [...prev.filter(a => a.id !== actionId), newAnim])
-            
-            // Save animation to database
-            const supabase = createClient()
-            const { data: { user } } = await supabase.auth.getUser()
-            if (user) {
-              await supabase
-                .from('player_animations')
-                .upsert({
-                  user_id: user.id,
-                  animation_id: actionId,
-                  animation_name: animName,
-                  animation_url: status.modelUrl
-                }, { onConflict: 'user_id,animation_id' })
-            }
-            
-            // Set as active animation and broadcast to other players
-            setActiveAnimationUrl(status.modelUrl)
-            updateAnimation(status.modelUrl)
-          } else if (status.status === "FAILED") {
-            console.error("[v0] Animation failed:", status.error)
-            clearInterval(pollInterval)
-            setIsGeneratingAnimation(false)
-            setSelectedAnimationId(null)
-            alert(`Animation failed: ${status.error || "Unknown error"}`)
-          }
-        } catch (err) {
-          console.error("[v0] Polling error:", err)
-        }
-      }, 2000)
-
-      // Cleanup on unmount
-      return () => clearInterval(pollInterval)
-    } catch (error) {
-      console.error("Animation generation error:", error)
-      setIsGeneratingAnimation(false)
-      setSelectedAnimationId(null)
-      alert(error instanceof Error ? error.message : "Failed to generate animation")
-    }
   }
 
   // Join form
@@ -498,134 +309,60 @@ function WorldPageContent() {
           )}
         </div>
 
-        {/* Animation Generation Panel */}
-        <div className="border-b border-border">
-          <button
-            onClick={() => setAnimationPanelOpen(!animationPanelOpen)}
-            className="w-full p-4 flex items-center justify-between text-sm font-medium hover:bg-secondary/50 transition-colors"
-          >
-            <div className="flex items-center gap-2">
-              <Plus className="h-4 w-4" />
-              Create Animations
-            </div>
-            {animationPanelOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          </button>
-          
-          {animationPanelOpen && (
-            <div className="px-4 pb-4 space-y-3 max-h-60 overflow-y-auto">
-              {/* Rig Model Section - show if no rig task ID */}
-              {!rigTaskId && (
-                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg space-y-2">
-                  <p className="text-sm font-medium text-amber-600">Model Not Rigged</p>
-                  <p className="text-xs text-muted-foreground">
-                    Your model needs to be rigged before you can create animations.
-                  </p>
-                  {isRigging ? (
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-sm">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Rigging model...
-                      </div>
-                      <Progress value={riggingProgress} className="h-2" />
-                    </div>
-                  ) : (
-                    <Button 
-                      size="sm" 
-                      onClick={rigExistingModel}
-                      className="w-full"
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Rig Model for Animations
-                    </Button>
-                  )}
-                </div>
-              )}
-
-              {/* Use Base Model Button */}
-              {activeAnimationUrl && (
+        {/* Animation Selection Panel - only shows saved animations */}
+        {generatedAnimations.length > 0 && (
+          <div className="border-b border-border">
+            <button
+              onClick={() => setAnimationPanelOpen(!animationPanelOpen)}
+              className="w-full p-4 flex items-center justify-between text-sm font-medium hover:bg-secondary/50 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Play className="h-4 w-4" />
+                Select Animation
+              </div>
+              {animationPanelOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
+            
+            {animationPanelOpen && (
+              <div className="px-4 pb-4 space-y-2">
+                {/* Use Base Model Button */}
                 <button
                   onClick={() => {
                     setActiveAnimationUrl(null)
                     updateAnimation(null)
                   }}
-                  className="w-full p-2 rounded-lg text-left text-sm flex items-center gap-2 transition-colors bg-secondary hover:bg-secondary/80 border-2 border-dashed border-muted-foreground/30"
+                  className={`w-full p-2 rounded-lg text-left text-sm flex items-center gap-2 transition-colors ${
+                    !activeAnimationUrl 
+                      ? "bg-primary text-primary-foreground" 
+                      : "bg-secondary hover:bg-secondary/80"
+                  }`}
                 >
                   <RotateCcw className="h-3 w-3" />
-                  Use Base Model (with textures)
+                  Base Model
                 </button>
-              )}
 
-              {/* Generated animations */}
-              {generatedAnimations.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground font-medium">Your Animations</p>
-                  {generatedAnimations.map((anim) => (
-                    <button
-                      key={anim.id}
-                      onClick={() => {
-                        setActiveAnimationUrl(anim.modelUrl)
-                        updateAnimation(anim.modelUrl)
-                      }}
-                      className={`w-full p-2 rounded-lg text-left text-sm flex items-center gap-2 transition-colors ${
-                        activeAnimationUrl === anim.modelUrl 
-                          ? "bg-primary text-primary-foreground" 
-                          : "bg-secondary hover:bg-secondary/80"
-                      }`}
-                    >
-                      <Check className="h-3 w-3" />
-                      {anim.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-              
-              {/* Animation library - only show if rigged */}
-              {rigTaskId && (
-                <>
-                  <p className="text-xs text-muted-foreground font-medium">Animation Library</p>
-                  {isGeneratingAnimation && (
-                <div className="p-3 bg-secondary rounded-lg space-y-2">
-                  <div className="flex items-center gap-2 text-sm">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Generating animation...
-                  </div>
-                  <Progress value={animationProgress} className="h-2" />
-                </div>
-              )}
-              
-              <div className="grid grid-cols-2 gap-2">
-                {ANIMATION_LIBRARY.map((anim) => {
-                  const isGenerated = generatedAnimations.some(g => g.id === anim.id)
-                  const isGenerating = selectedAnimationId === anim.id && isGeneratingAnimation
-                  
-                  return (
-                    <button
-                      key={anim.id}
-                      onClick={() => !isGenerated && !isGeneratingAnimation && generateAnimation(anim.id, anim.name)}
-                      disabled={isGeneratingAnimation || isGenerated}
-                      className={`p-2 rounded-lg text-xs text-left transition-colors ${
-                        isGenerated 
-                          ? "bg-green-500/20 text-green-600 cursor-default"
-                          : isGenerating
-                          ? "bg-primary/20 text-primary"
-                          : "bg-secondary hover:bg-secondary/80"
-                      } disabled:opacity-50`}
-                    >
-                      <div className="flex items-center gap-1">
-                        {isGenerated && <Check className="h-3 w-3" />}
-                        {isGenerating && <Loader2 className="h-3 w-3 animate-spin" />}
-                        <span className="truncate">{anim.name}</span>
-                      </div>
-                      <span className="text-[10px] text-muted-foreground">{anim.category}</span>
-                    </button>
-                  )
-                })}
+                {/* Saved animations */}
+                {generatedAnimations.map((anim) => (
+                  <button
+                    key={anim.id}
+                    onClick={() => {
+                      setActiveAnimationUrl(anim.modelUrl)
+                      updateAnimation(anim.modelUrl)
+                    }}
+                    className={`w-full p-2 rounded-lg text-left text-sm flex items-center gap-2 transition-colors ${
+                      activeAnimationUrl === anim.modelUrl 
+                        ? "bg-primary text-primary-foreground" 
+                        : "bg-secondary hover:bg-secondary/80"
+                    }`}
+                  >
+                    <Play className="h-3 w-3" />
+                    {anim.name}
+                  </button>
+                ))}
               </div>
-                </>
-              )}
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         {/* Players List */}
         <div className="flex-1 overflow-y-auto p-4 space-y-2">
