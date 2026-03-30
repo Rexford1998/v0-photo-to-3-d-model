@@ -44,7 +44,7 @@ function SignUpForm() {
     }
 
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -54,7 +54,14 @@ function SignUpForm() {
         },
       })
       if (error) throw error
-      router.push('/auth/sign-up-success')
+      
+      // If session exists (email confirmation disabled), redirect to returnTo
+      if (data.session) {
+        router.push(returnTo)
+      } else {
+        // Need email confirmation - redirect to success page with returnTo
+        router.push(`/auth/sign-up-success?returnTo=${encodeURIComponent(returnTo)}`)
+      }
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : 'An error occurred')
     } finally {

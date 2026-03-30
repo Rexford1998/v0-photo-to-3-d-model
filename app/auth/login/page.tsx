@@ -36,6 +36,7 @@ function LoginForm() {
         password,
       })
       if (error) throw error
+      router.refresh()
       router.push(returnTo)
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : 'An error occurred')
