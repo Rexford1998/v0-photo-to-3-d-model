@@ -4,10 +4,43 @@
 import { useSearchParams, useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { ArrowLeft, Send, Users, LogOut, Play } from "lucide-react"
+import { ArrowLeft, Send, Users, LogOut, Play, Plus, Loader2, Check, ChevronDown, ChevronUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Progress } from "@/components/ui/progress"
+
+// Animation library from Meshy
+const ANIMATION_LIBRARY = [
+  { id: 0, name: "Idle", category: "DailyActions" },
+  { id: 1, name: "Walking", category: "WalkAndRun" },
+  { id: 14, name: "Running", category: "WalkAndRun" },
+  { id: 22, name: "Funny Dancing 1", category: "Dancing" },
+  { id: 23, name: "Funny Dancing 2", category: "Dancing" },
+  { id: 24, name: "Funny Dancing 3", category: "Dancing" },
+  { id: 28, name: "Wave Hello", category: "DailyActions" },
+  { id: 44, name: "Happy Jump", category: "BodyMovements" },
+  { id: 59, name: "Victory Cheer", category: "BodyMovements" },
+  { id: 64, name: "All Night Dance", category: "Dancing" },
+  { id: 66, name: "Boom Dance", category: "Dancing" },
+  { id: 74, name: "Gangnam Groove", category: "Dancing" },
+  { id: 82, name: "Shake It Off", category: "Dancing" },
+  { id: 87, name: "Boxing Practice", category: "Fighting" },
+  { id: 96, name: "Kung Fu Punch", category: "Fighting" },
+  { id: 207, name: "Roundhouse Kick", category: "Fighting" },
+  { id: 325, name: "Jump Push Up", category: "WorkingOut" },
+  { id: 326, name: "Jumping Jacks", category: "WorkingOut" },
+  { id: 375, name: "Handstand Flip", category: "BodyMovements" },
+  { id: 395, name: "Breakdance", category: "BodyMovements" },
+  { id: 412, name: "Victory", category: "BodyMovements" },
+  { id: 452, name: "Backflip", category: "BodyMovements" },
+]
+
+interface GeneratedAnimation {
+  id: number
+  name: string
+  modelUrl: string
+}
 import { useMultiplayerWorld } from "@/hooks/useMultiplayerWorld"
 import { createClient } from "@/lib/supabase/client"
 import dynamic from "next/dynamic"
@@ -40,6 +73,25 @@ function WorldPageContent() {
   const [chatInput, setChatInput] = useState("")
   const [currentAnimation, setCurrentAnimation] = useState<string>("")
   const [availableAnimations, setAvailableAnimations] = useState<string[]>([])
+  const [generatedAnimations, setGeneratedAnimations] = useState<GeneratedAnimation[]>([])
+  const [isGeneratingAnimation, setIsGeneratingAnimation] = useState(false)
+  const [animationProgress, setAnimationProgress] = useState(0)
+  const [selectedAnimationId, setSelectedAnimationId] = useState<number | null>(null)
+  const [animationPanelOpen, setAnimationPanelOpen] = useState(false)
+  const [rigTaskId, setRigTaskId] = useState<string | null>(null)
+  const [activeAnimationUrl, setActiveAnimationUrl] = useState<string | null>(null)
+
+  // Extract rig task ID from model URL
+  useEffect(() => {
+    if (modelUrl) {
+      // The model URL might contain the rig task ID or we need to extract it
+      // For rigged models from Meshy, the URL pattern includes the task ID
+      const match = modelUrl.match(/tasks\/([a-f0-9-]+)\//)
+      if (match) {
+        setRigTaskId(match[1])
+      }
+    }
+  }, [modelUrl])
 
   // Load available animations from the model
   useEffect(() => {
@@ -132,6 +184,76 @@ function WorldPageContent() {
     router.push("/")
   }
 
+  // Generate animation from Meshy
+  const generateAnimation = async (actionId: number, animName: string) => {
+    if (!rigTaskId) {
+      alert("No rigged model found. Please generate a rigged model first.")
+      return
+    }
+
+    setIsGeneratingAnimation(true)
+    setSelectedAnimationId(actionId)
+    setAnimationProgress(0)
+
+    try {
+      // Start animation generation
+      const createResponse = await fetch("/api/meshy/animation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rigTaskId, actionId }),
+      })
+
+      if (!createResponse.ok) {
+        const error = await createResponse.json()
+        throw new Error(error.error || "Failed to start animation")
+      }
+
+      const { taskId } = await createResponse.json()
+
+      // Poll for completion
+      const pollInterval = setInterval(async () => {
+        try {
+          const statusResponse = await fetch(`/api/meshy/animation/${taskId}`)
+          const status = await statusResponse.json()
+
+          setAnimationProgress(status.progress || 0)
+
+          if (status.status === "SUCCEEDED" && status.modelUrl) {
+            clearInterval(pollInterval)
+            setIsGeneratingAnimation(false)
+            setSelectedAnimationId(null)
+            
+            // Add to generated animations
+            const newAnim: GeneratedAnimation = {
+              id: actionId,
+              name: animName,
+              modelUrl: status.modelUrl,
+            }
+            setGeneratedAnimations(prev => [...prev.filter(a => a.id !== actionId), newAnim])
+            
+            // Set as active animation
+            setActiveAnimationUrl(status.modelUrl)
+          } else if (status.status === "FAILED") {
+            clearInterval(pollInterval)
+            setIsGeneratingAnimation(false)
+            setSelectedAnimationId(null)
+            alert(`Animation failed: ${status.error || "Unknown error"}`)
+          }
+        } catch (err) {
+          console.error("Polling error:", err)
+        }
+      }, 2000)
+
+      // Cleanup on unmount
+      return () => clearInterval(pollInterval)
+    } catch (error) {
+      console.error("Animation generation error:", error)
+      setIsGeneratingAnimation(false)
+      setSelectedAnimationId(null)
+      alert(error instanceof Error ? error.message : "Failed to generate animation")
+    }
+  }
+
   // Join form
   if (!isConnected) {
     return (
@@ -198,7 +320,13 @@ function WorldPageContent() {
       {/* 3D Canvas */}
       <div className="flex-1">
         <Suspense fallback={<div className="flex items-center justify-center h-full w-full">Loading 3D world...</div>}>
-          <WorldScene players={players} localPlayerId={playerId} modelUrl={modelUrl} onPositionChange={updatePosition} currentAnimation={currentAnimation} />
+          <WorldScene 
+            players={players} 
+            localPlayerId={playerId} 
+            modelUrl={activeAnimationUrl || modelUrl} 
+            onPositionChange={updatePosition} 
+            currentAnimation={currentAnimation} 
+          />
         </Suspense>
       </div>
 
@@ -244,6 +372,85 @@ function WorldPageContent() {
             </div>
           )}
         </div>
+
+        {/* Animation Generation Panel */}
+        <div className="border-b border-border">
+          <button
+            onClick={() => setAnimationPanelOpen(!animationPanelOpen)}
+            className="w-full p-4 flex items-center justify-between text-sm font-medium hover:bg-secondary/50 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <Plus className="h-4 w-4" />
+              Create Animations
+            </div>
+            {animationPanelOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+          
+          {animationPanelOpen && (
+            <div className="px-4 pb-4 space-y-3 max-h-60 overflow-y-auto">
+              {/* Generated animations */}
+              {generatedAnimations.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground font-medium">Your Animations</p>
+                  {generatedAnimations.map((anim) => (
+                    <button
+                      key={anim.id}
+                      onClick={() => setActiveAnimationUrl(anim.modelUrl)}
+                      className={`w-full p-2 rounded-lg text-left text-sm flex items-center gap-2 transition-colors ${
+                        activeAnimationUrl === anim.modelUrl 
+                          ? "bg-primary text-primary-foreground" 
+                          : "bg-secondary hover:bg-secondary/80"
+                      }`}
+                    >
+                      <Check className="h-3 w-3" />
+                      {anim.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+              
+              {/* Animation library */}
+              <p className="text-xs text-muted-foreground font-medium">Animation Library</p>
+              {isGeneratingAnimation && (
+                <div className="p-3 bg-secondary rounded-lg space-y-2">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Generating animation...
+                  </div>
+                  <Progress value={animationProgress} className="h-2" />
+                </div>
+              )}
+              
+              <div className="grid grid-cols-2 gap-2">
+                {ANIMATION_LIBRARY.map((anim) => {
+                  const isGenerated = generatedAnimations.some(g => g.id === anim.id)
+                  const isGenerating = selectedAnimationId === anim.id && isGeneratingAnimation
+                  
+                  return (
+                    <button
+                      key={anim.id}
+                      onClick={() => !isGenerated && !isGeneratingAnimation && generateAnimation(anim.id, anim.name)}
+                      disabled={isGeneratingAnimation || isGenerated}
+                      className={`p-2 rounded-lg text-xs text-left transition-colors ${
+                        isGenerated 
+                          ? "bg-green-500/20 text-green-600 cursor-default"
+                          : isGenerating
+                          ? "bg-primary/20 text-primary"
+                          : "bg-secondary hover:bg-secondary/80"
+                      } disabled:opacity-50`}
+                    >
+                      <div className="flex items-center gap-1">
+                        {isGenerated && <Check className="h-3 w-3" />}
+                        {isGenerating && <Loader2 className="h-3 w-3 animate-spin" />}
+                        <span className="truncate">{anim.name}</span>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground">{anim.category}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
         {/* Players List */}
         <div className="flex-1 overflow-y-auto p-4 space-y-2">
