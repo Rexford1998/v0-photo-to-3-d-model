@@ -4,7 +4,7 @@
 import { useSearchParams, useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { ArrowLeft, Send, Users, LogOut, Play, Plus, Loader2, Check, ChevronDown, ChevronUp } from "lucide-react"
+import { ArrowLeft, Send, Users, LogOut, Play, Plus, Loader2, Check, ChevronDown, ChevronUp, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -83,13 +83,14 @@ function WorldPageContent() {
   const [isRigging, setIsRigging] = useState(false)
   const [riggingProgress, setRiggingProgress] = useState(0)
 
-  // Load rig task ID from user's player data
+  // Load rig task ID and saved animations from user's player data
   useEffect(() => {
-    const loadRigTaskId = async () => {
+    const loadUserData = async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       
       if (user) {
+        // Load rig task ID
         const { data: playerData } = await supabase
           .from('players')
           .select('rig_task_id')
@@ -99,10 +100,24 @@ function WorldPageContent() {
         if (playerData?.rig_task_id) {
           setRigTaskId(playerData.rig_task_id)
         }
+
+        // Load saved animations
+        const { data: savedAnimations } = await supabase
+          .from('player_animations')
+          .select('animation_id, animation_name, animation_url')
+          .eq('user_id', user.id)
+        
+        if (savedAnimations && savedAnimations.length > 0) {
+          setGeneratedAnimations(savedAnimations.map(a => ({
+            id: a.animation_id,
+            name: a.animation_name,
+            modelUrl: a.animation_url
+          })))
+        }
       }
     }
     
-    loadRigTaskId()
+    loadUserData()
   }, [])
 
   // Load available animations from the model
@@ -326,6 +341,20 @@ function WorldPageContent() {
             }
             setGeneratedAnimations(prev => [...prev.filter(a => a.id !== actionId), newAnim])
             
+            // Save animation to database
+            const supabase = createClient()
+            const { data: { user } } = await supabase.auth.getUser()
+            if (user) {
+              await supabase
+                .from('player_animations')
+                .upsert({
+                  user_id: user.id,
+                  animation_id: actionId,
+                  animation_name: animName,
+                  animation_url: status.modelUrl
+                }, { onConflict: 'user_id,animation_id' })
+            }
+            
             // Set as active animation and broadcast to other players
             setActiveAnimationUrl(status.modelUrl)
             updateAnimation(status.modelUrl)
@@ -510,6 +539,20 @@ function WorldPageContent() {
                     </Button>
                   )}
                 </div>
+              )}
+
+              {/* Use Base Model Button */}
+              {activeAnimationUrl && (
+                <button
+                  onClick={() => {
+                    setActiveAnimationUrl(null)
+                    updateAnimation(null)
+                  }}
+                  className="w-full p-2 rounded-lg text-left text-sm flex items-center gap-2 transition-colors bg-secondary hover:bg-secondary/80 border-2 border-dashed border-muted-foreground/30"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  Use Base Model (with textures)
+                </button>
               )}
 
               {/* Generated animations */}
