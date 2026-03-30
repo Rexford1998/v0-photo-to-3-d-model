@@ -73,6 +73,8 @@ function WorldPageContent() {
   const [generatedAnimations, setGeneratedAnimations] = useState<GeneratedAnimation[]>([])
   const [animationPanelOpen, setAnimationPanelOpen] = useState(false)
   const [activeAnimationUrl, setActiveAnimationUrl] = useState<string | null>(null)
+  const [availableAnimations, setAvailableAnimations] = useState<string[]>([])
+  const [currentAnimation, setCurrentAnimation] = useState("")
 
   // Load saved animations from user's player data
   useEffect(() => {
@@ -111,16 +113,35 @@ function WorldPageContent() {
           : `/api/proxy-model?url=${encodeURIComponent(modelUrl)}`
         
         const response = await fetch(proxiedUrl)
+        if (!response.ok) {
+          throw new Error(`Failed to fetch model (${response.status})`)
+        }
+
         const arrayBuffer = await response.arrayBuffer()
         
         // Parse GLB to extract animation names using minimal parsing
+        if (arrayBuffer.byteLength < 20) {
+          return
+        }
+
         const dataView = new DataView(arrayBuffer)
+        const magic = dataView.getUint32(0, true)
+        // Binary glTF magic: "glTF" (0x46546C67)
+        if (magic !== 0x46546c67) {
+          return
+        }
+
         const decoder = new TextDecoder()
         
         // GLB structure: 12 byte header, then chunks
         // We need to find the JSON chunk and parse it for animation names
         if (arrayBuffer.byteLength > 20) {
           const jsonLength = dataView.getUint32(12, true)
+          const jsonStart = 20
+          if (jsonLength <= 0 || jsonStart + jsonLength > arrayBuffer.byteLength) {
+            return
+          }
+
           const jsonData = decoder.decode(new Uint8Array(arrayBuffer, 20, jsonLength))
           const gltf = JSON.parse(jsonData)
           
