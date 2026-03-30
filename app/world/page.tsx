@@ -264,6 +264,7 @@ function WorldPageContent() {
             players={players}
             localPlayerId={playerId}
             modelUrl={activeAnimationUrl || modelUrl}
+            originalModelUrl={modelUrl}
             onPositionChange={updatePosition}
           />
         </Suspense>
