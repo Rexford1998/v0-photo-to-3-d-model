@@ -36,10 +36,15 @@ export async function GET(
 
     const data = await response.json()
     
+    console.log("[v0] Animation status response:", JSON.stringify(data, null, 2))
+    
+    // Meshy returns the glb URL in different locations depending on the response
+    const modelUrl = data.output?.glb_url || data.output || data.glb_url || null
+    
     return NextResponse.json({
       status: data.status,
       progress: data.progress || 0,
-      modelUrl: data.output || null,
+      modelUrl: modelUrl,
       error: data.task_error?.message || null,
     })
   } catch (error) {
