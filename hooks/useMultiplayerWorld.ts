@@ -92,29 +92,74 @@ export function useMultiplayerWorld(modelUrl: string = "") {
       try {
         setError(null)
 
-        const { data, error: insertError } = await supabase
+        // Get current user
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) {
+          setError("You must be logged in to join the world")
+          return false
+        }
+
+        // Check if user already has a player record
+        const { data: existingPlayer } = await supabase
           .from("players")
-          .insert([
-            {
+          .select("*")
+          .eq("user_id", user.id)
+          .single()
+
+        let playerData
+        
+        if (existingPlayer) {
+          // Update existing player record
+          const { data, error: updateError } = await supabase
+            .from("players")
+            .update({
               nickname,
-              model_url: modelUrl || null,
+              model_url: modelUrl || existingPlayer.model_url,
               position_x: Math.random() * 20 - 10,
               position_y: 0,
               position_z: Math.random() * 20 - 10,
               rotation_y: 0,
-              color
-            }
-          ])
-          .select()
-          .single()
-
-        if (insertError) {
-          console.error("[v0] Join error:", insertError)
-          setError(`Failed to join: ${insertError.message}`)
-          return false
+              color,
+              updated_at: new Date().toISOString()
+            })
+            .eq("user_id", user.id)
+            .select()
+            .single()
+          
+          if (updateError) {
+            console.error("[v0] Update error:", updateError)
+            setError(`Failed to join: ${updateError.message}`)
+            return false
+          }
+          playerData = data
+        } else {
+          // Insert new player record
+          const { data, error: insertError } = await supabase
+            .from("players")
+            .insert([
+              {
+                user_id: user.id,
+                nickname,
+                model_url: modelUrl || null,
+                position_x: Math.random() * 20 - 10,
+                position_y: 0,
+                position_z: Math.random() * 20 - 10,
+                rotation_y: 0,
+                color
+              }
+            ])
+            .select()
+            .single()
+          
+          if (insertError) {
+            console.error("[v0] Insert error:", insertError)
+            setError(`Failed to join: ${insertError.message}`)
+            return false
+          }
+          playerData = data
         }
 
-        setPlayerId(data.id)
+        setPlayerId(playerData.id)
         setIsConnected(true)
 
         const { data: allPlayers } = await supabase.from("players").select("*")
