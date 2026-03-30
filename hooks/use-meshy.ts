@@ -49,7 +49,7 @@ interface UseMeshyResult {
   animationUrl: string | null
   rigTaskId: string | null
   error: string | null
-  generateModel: (imageDataUrl: string) => Promise<void>
+  generateModel: (imageDataUrl: string, options?: { rigGuidePoints?: Record<string, { x: number; y: number }> }) => Promise<void>
   reset: () => void
 }
 
@@ -197,7 +197,7 @@ export function useMeshy(): UseMeshyResult {
     throw new Error("Rigging task timed out")
   }
 
-  const generateModel = useCallback(async (imageDataUrl: string) => {
+  const generateModel = useCallback(async (imageDataUrl: string, options?: { rigGuidePoints?: Record<string, { x: number; y: number }> }) => {
     reset()
     
     abortControllerRef.current = new AbortController()
@@ -224,7 +224,7 @@ export function useMeshy(): UseMeshyResult {
       const createTaskResponse = await fetch("/api/meshy/image-to-3d", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageUrl: compressedImage }),
+        body: JSON.stringify({ imageUrl: compressedImage, rigGuidePoints: options?.rigGuidePoints || {} }),
         signal,
       })
 

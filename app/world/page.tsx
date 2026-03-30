@@ -2,7 +2,7 @@
 
 // Multiplayer world - 3D environment with player sync and chat
 import { useSearchParams, useRouter } from "next/navigation"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
 import { ArrowLeft, Send, Users, LogOut, Play, ChevronDown, ChevronUp, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -54,6 +54,8 @@ function WorldPageContent() {
   const modelUrl = searchParams.get("modelUrl")
   const [nickname, setNickname] = useState("")
   const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [selectedCountry, setSelectedCountry] = useState("United States")
+  const [joinedCountry, setJoinedCountry] = useState<string | null>(null)
 
   // Get user email for default nickname
   useEffect(() => {
@@ -75,6 +77,20 @@ function WorldPageContent() {
   const [activeAnimationUrl, setActiveAnimationUrl] = useState<string | null>(null)
   const [availableAnimations, setAvailableAnimations] = useState<string[]>([])
   const [currentAnimation, setCurrentAnimation] = useState("")
+
+  const countryOptions = useMemo(() => {
+    const supportedValuesOf = (Intl as any).supportedValuesOf as ((type: string) => string[]) | undefined
+    if (!supportedValuesOf) return ["United States"]
+
+    const displayNames = new Intl.DisplayNames(["en"], { type: "region" })
+    const countries = supportedValuesOf("region")
+      .filter((code) => /^[A-Z]{2}$/.test(code))
+      .map((code) => displayNames.of(code))
+      .filter((name): name is string => Boolean(name) && name.length > 2)
+      .sort((a, b) => a.localeCompare(b))
+
+    return countries.length > 0 ? countries : ["United States"]
+  }, [])
 
   // Load saved animations from user's player data
   useEffect(() => {
@@ -193,12 +209,14 @@ function WorldPageContent() {
   }
 
   const handleJoinWorld = async () => {
-    if (!nickname.trim()) return
+    if (!nickname.trim() || !selectedCountry) return
     setIsJoining(true)
     const success = await joinWorld(nickname, color)
     if (!success) {
       setIsJoining(false)
+      return
     }
+    setJoinedCountry(selectedCountry)
   }
 
   const handleSendMessage = async () => {
@@ -243,6 +261,22 @@ function WorldPageContent() {
             </div>
 
             <div>
+              <label className="text-sm font-medium mb-2 block">Country</label>
+              <Select value={selectedCountry} onValueChange={setSelectedCountry}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select a country" />
+                </SelectTrigger>
+                <SelectContent className="max-h-64">
+                  {countryOptions.map((country) => (
+                    <SelectItem key={country} value={country}>
+                      {country}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
               <label className="text-sm font-medium mb-2 block">Avatar Color</label>
               <div className="flex gap-2">
                 {["#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899"].map((c) => (
@@ -257,7 +291,7 @@ function WorldPageContent() {
             </div>
           </div>
 
-          <Button onClick={handleJoinWorld} disabled={!nickname.trim() || isJoining} className="w-full">
+          <Button onClick={handleJoinWorld} disabled={!nickname.trim() || !selectedCountry || isJoining} className="w-full">
             {isJoining ? "Joining..." : "Enter World"}
           </Button>
 
@@ -306,7 +340,9 @@ function WorldPageContent() {
               Leave
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">Use WASD or Arrow Keys to move</p>
+          <p className="text-xs text-muted-foreground">
+            Use Arrow Keys to move{joinedCountry ? ` • Location: ${joinedCountry}` : ""}
+          </p>
           
           {/* Animation Selector */}
           {availableAnimations.length > 0 && (
