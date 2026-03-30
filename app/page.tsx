@@ -335,17 +335,17 @@ function HomeContent() {
                 {!user ? (
                   <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 space-y-4">
                     <div className="text-center">
-                      <h3 className="font-semibold text-foreground">Save & Play</h3>
-                      <p className="text-sm text-muted-foreground">Sign up to save your character and join the multiplayer world</p>
+                      <h3 className="font-semibold text-foreground">Join Multiplayer World</h3>
+                      <p className="text-sm text-muted-foreground">Sign up or log in to join the multiplayer world with your character</p>
                     </div>
                     <div className="flex gap-3">
-                      <Link href={`/auth/login?returnTo=${encodeURIComponent(`/?modelUrl=${encodeURIComponent(modelUrl)}`)}`} className="flex-1">
+                      <Link href={`/auth/login?returnTo=${encodeURIComponent(`/world?modelUrl=${encodeURIComponent(modelUrl)}`)}`} className="flex-1">
                         <Button variant="outline" className="w-full">
                           <LogIn className="mr-2 h-4 w-4" />
                           Log In
                         </Button>
                       </Link>
-                      <Link href={`/auth/sign-up?returnTo=${encodeURIComponent(`/?modelUrl=${encodeURIComponent(modelUrl)}`)}`} className="flex-1">
+                      <Link href={`/auth/sign-up?returnTo=${encodeURIComponent(`/world?modelUrl=${encodeURIComponent(modelUrl)}`)}`} className="flex-1">
                         <Button className="w-full">
                           <UserPlus className="mr-2 h-4 w-4" />
                           Sign Up
