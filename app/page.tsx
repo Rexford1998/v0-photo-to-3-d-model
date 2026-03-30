@@ -1,14 +1,16 @@
 "use client"
 
-// Main Page - Build: 2026-03-25-v4
-import { useState } from "react"
+// Main Page - Build: 2026-03-25-v5
+import { useState, useEffect } from "react"
 import dynamic from "next/dynamic"
 import { ImageUpload } from "@/components/image-upload"
 import { ProgressSteps } from "@/components/progress-steps"
 import { useMeshy } from "@/hooks/use-meshy"
 import { Button } from "@/components/ui/button"
-import { Sparkles, RotateCcw, Zap, Package, Play, Gamepad2 } from "lucide-react"
+import { Sparkles, RotateCcw, Zap, Package, Play, Gamepad2, LogIn, UserPlus, LogOut, User } from "lucide-react"
 import Link from "next/link"
+import { createClient } from "@/lib/supabase/client"
+import type { User as SupabaseUser } from "@supabase/supabase-js"
 
 const ModelViewer = dynamic(
   () => import("@/components/model-viewer").then((mod) => mod.ModelViewer),
@@ -33,6 +35,10 @@ const STEPS = [
 
 export default function Home() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [user, setUser] = useState<SupabaseUser | null>(null)
+  const [savedModelUrl, setSavedModelUrl] = useState<string | null>(null)
+  const [isLoadingUser, setIsLoadingUser] = useState(true)
+  
   const {
     stage,
     currentStep,
@@ -43,6 +49,72 @@ export default function Home() {
     generateModel,
     reset,
   } = useMeshy()
+
+  // Check for logged in user and load their saved model
+  useEffect(() => {
+    const supabase = createClient()
+    
+    const checkUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      setUser(user)
+      
+      if (user) {
+        // Load user's saved player/model
+        const { data: playerData } = await supabase
+          .from('players')
+          .select('model_url')
+          .eq('user_id', user.id)
+          .single()
+        
+        if (playerData?.model_url) {
+          setSavedModelUrl(playerData.model_url)
+        }
+      }
+      setIsLoadingUser(false)
+    }
+    
+    checkUser()
+    
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      setUser(session?.user || null)
+      if (!session?.user) {
+        setSavedModelUrl(null)
+      }
+    })
+    
+    return () => subscription.unsubscribe()
+  }, [])
+
+  // Save model to user's account when generated
+  useEffect(() => {
+    const saveModel = async () => {
+      if (stage === "complete" && modelUrl && user) {
+        const supabase = createClient()
+        
+        // Upsert the player record with the new model
+        await supabase
+          .from('players')
+          .upsert({
+            user_id: user.id,
+            model_url: modelUrl,
+            nickname: user.email?.split('@')[0] || 'Player',
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'user_id' })
+        
+        setSavedModelUrl(modelUrl)
+      }
+    }
+    
+    saveModel()
+  }, [stage, modelUrl, user])
+
+  const handleLogout = async () => {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    setUser(null)
+    setSavedModelUrl(null)
+  }
 
   const handleImageSelect = (dataUrl: string) => {
     setSelectedImage(dataUrl)
@@ -66,6 +138,49 @@ export default function Home() {
     <main className="min-h-screen bg-background">
       <header className="relative overflow-hidden border-b border-border bg-card">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-accent/10 via-transparent to-transparent" />
+        
+        {/* Auth header */}
+        <div className="relative mx-auto max-w-6xl px-4 pt-4">
+          <div className="flex justify-end items-center gap-3">
+            {isLoadingUser ? (
+              <div className="h-8 w-20 animate-pulse bg-muted rounded" />
+            ) : user ? (
+              <>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <User className="h-4 w-4" />
+                  <span>{user.email}</span>
+                </div>
+                {savedModelUrl && (
+                  <Link href={`/world?modelUrl=${encodeURIComponent(savedModelUrl)}`}>
+                    <Button size="sm" className="bg-green-600 hover:bg-green-700">
+                      <Gamepad2 className="mr-2 h-4 w-4" />
+                      Enter Multiplayer
+                    </Button>
+                  </Link>
+                )}
+                <Button size="sm" variant="ghost" onClick={handleLogout}>
+                  <LogOut className="h-4 w-4" />
+                </Button>
+              </>
+            ) : (
+              <>
+                <Link href="/auth/login">
+                  <Button size="sm" variant="ghost">
+                    <LogIn className="mr-2 h-4 w-4" />
+                    Log In
+                  </Button>
+                </Link>
+                <Link href="/auth/sign-up">
+                  <Button size="sm">
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    Sign Up
+                  </Button>
+                </Link>
+              </>
+            )}
+          </div>
+        </div>
+        
         <div className="relative mx-auto max-w-6xl px-4 py-12 sm:py-16">
           <div className="flex flex-col items-center text-center">
             <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-accent/10 px-4 py-1.5 text-sm font-medium text-accent">
@@ -207,13 +322,39 @@ export default function Home() {
             )}
 
             {modelUrl && (
-              <div className="flex justify-center mt-6">
-                <Link href={`/world?modelUrl=${encodeURIComponent(modelUrl)}`}>
-                  <Button size="lg" className="h-12 px-8 text-base font-semibold bg-green-600 hover:bg-green-700">
-                    <Gamepad2 className="mr-2 h-5 w-5" />
-                    Join Multiplayer World
-                  </Button>
-                </Link>
+              <div className="flex flex-col items-center gap-4 mt-6">
+                {user ? (
+                  <>
+                    <p className="text-sm text-green-600">Model saved to your account!</p>
+                    <Link href={`/world?modelUrl=${encodeURIComponent(modelUrl)}`}>
+                      <Button size="lg" className="h-12 px-8 text-base font-semibold bg-green-600 hover:bg-green-700">
+                        <Gamepad2 className="mr-2 h-5 w-5" />
+                        Join Multiplayer World
+                      </Button>
+                    </Link>
+                  </>
+                ) : (
+                  <div className="rounded-xl border border-border bg-card p-6 text-center max-w-md">
+                    <h3 className="font-semibold text-foreground mb-2">Save & Play Multiplayer</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Sign up to save your character and join the multiplayer world with other players.
+                    </p>
+                    <div className="flex gap-3 justify-center">
+                      <Link href="/auth/login">
+                        <Button variant="outline">
+                          <LogIn className="mr-2 h-4 w-4" />
+                          Log In
+                        </Button>
+                      </Link>
+                      <Link href="/auth/sign-up">
+                        <Button>
+                          <UserPlus className="mr-2 h-4 w-4" />
+                          Sign Up
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

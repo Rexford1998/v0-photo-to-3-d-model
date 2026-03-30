@@ -8,6 +8,7 @@ import { ArrowLeft, Send, Users, LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useMultiplayerWorld } from "@/hooks/useMultiplayerWorld"
+import { createClient } from "@/lib/supabase/client"
 import dynamic from "next/dynamic"
 
 const WorldScene = dynamic(() => import("@/components/world-scene"), { ssr: false })
@@ -19,6 +20,20 @@ function WorldPageContent() {
   const router = useRouter()
   const modelUrl = searchParams.get("modelUrl")
   const [nickname, setNickname] = useState("")
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+
+  // Get user email for default nickname
+  useEffect(() => {
+    const getUser = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user?.email) {
+        setUserEmail(user.email)
+        setNickname(user.email.split('@')[0])
+      }
+    }
+    getUser()
+  }, [])
   const [color, setColor] = useState("#3b82f6")
   const [isJoining, setIsJoining] = useState(false)
   const [chatInput, setChatInput] = useState("")
@@ -82,7 +97,9 @@ function WorldPageContent() {
         <div className="w-full max-w-md bg-card rounded-xl border border-border p-8 space-y-6 shadow-lg">
           <div>
             <h1 className="text-3xl font-bold">Join World</h1>
-            <p className="text-muted-foreground mt-2">Enter your nickname and join other players</p>
+            <p className="text-muted-foreground mt-2">
+              {userEmail ? `Logged in as ${userEmail}` : "Enter your nickname and join other players"}
+            </p>
           </div>
 
           {hookError && (
