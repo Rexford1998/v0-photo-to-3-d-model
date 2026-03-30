@@ -2,6 +2,27 @@ import { NextRequest, NextResponse } from "next/server"
 
 const MESHY_API_KEY = process.env.MESHY_API_KEY
 
+function getMeshyErrorMessage(status: number, errorText: string) {
+  let providerMessage = ""
+
+  try {
+    const parsed = JSON.parse(errorText)
+    providerMessage = parsed?.message || parsed?.error || parsed?.detail || ""
+  } catch {
+    providerMessage = errorText
+  }
+
+  if (status === 402) {
+    return "Meshy Rigging API returned 402 (Payment Required). Rigging requires available Meshy credits. Add credits at meshy.ai and retry."
+  }
+
+  if (providerMessage) {
+    return `Meshy Rigging API error (${status}): ${providerMessage}`
+  }
+
+  return `Meshy Rigging API error: ${status}`
+}
+
 export async function POST(request: NextRequest) {
   if (!MESHY_API_KEY) {
     return NextResponse.json(
@@ -45,10 +66,10 @@ export async function POST(request: NextRequest) {
     })
 
     if (!response.ok) {
-      const error = await response.text()
-      console.error("Meshy Rigging API error:", error)
+      const errorText = await response.text()
+      console.error("Meshy Rigging API error:", errorText)
       return NextResponse.json(
-        { error: `Meshy Rigging API error: ${response.status}` },
+        { error: getMeshyErrorMessage(response.status, errorText) },
         { status: response.status }
       )
     }
