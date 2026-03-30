@@ -45,25 +45,28 @@ function CapsuleAvatar({ color }: { color: string }) {
 // GLB Model loader component with animation support
 function GLBModel({ modelUrl, isMoving }: { modelUrl: string; isMoving?: boolean }) {
   const groupRef = useRef<THREE.Group>(null)
+  const cloneRef = useRef<THREE.Group | null>(null)
   const proxiedUrl = getProxiedUrl(modelUrl)
   const { scene, animations } = useGLTF(proxiedUrl)
   
-  // Clone scene to avoid mutation issues
-  const clone = useMemo(() => SkeletonUtils.clone(scene), [scene])
-  const { actions, names } = useAnimations(animations, groupRef)
+  // Clone scene to avoid mutation issues - store in ref for animation binding
+  const clone = useMemo(() => {
+    const cloned = SkeletonUtils.clone(scene)
+    cloneRef.current = cloned
+    return cloned
+  }, [scene])
+  
+  // Bind animations to the cloned scene (not groupRef) so bones are found
+  const { actions, names } = useAnimations(animations, cloneRef)
   
   // Auto-play the first animation when model loads (Meshy bakes animation into the GLB)
   useEffect(() => {
-    console.log("[v0] GLBModel animations found:", names)
-    
     if (!actions || names.length === 0) {
-      console.log("[v0] No animations in this model")
       return
     }
     
     // Play the first animation (Meshy models have one baked animation)
     const animationToPlay = names[0]
-    console.log("[v0] Playing animation:", animationToPlay)
     
     if (animationToPlay && actions[animationToPlay]) {
       const action = actions[animationToPlay]
