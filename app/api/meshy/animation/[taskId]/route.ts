@@ -38,8 +38,8 @@ export async function GET(
     
     console.log("[v0] Animation status response:", JSON.stringify(data, null, 2))
     
-    // Meshy returns the glb URL in different locations depending on the response
-    const modelUrl = data.output?.glb_url || data.output || data.glb_url || null
+    // Meshy Animation API returns the glb URL in data.result.glb_url
+    const modelUrl = data.result?.glb_url || data.result?.fbx_url || null
     
     return NextResponse.json({
       status: data.status,
