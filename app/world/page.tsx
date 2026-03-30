@@ -198,8 +198,12 @@ function WorldPageContent() {
 
   // Rig the existing model to enable animations
   const rigExistingModel = async () => {
-    if (!modelUrl) return
+    if (!modelUrl) {
+      console.log("[v0] No model URL provided")
+      return
+    }
 
+    console.log("[v0] Starting rig process for model:", modelUrl)
     setIsRigging(true)
     setRiggingProgress(0)
 
@@ -210,6 +214,8 @@ function WorldPageContent() {
         const urlParam = new URL(modelUrl, window.location.origin).searchParams.get('url')
         if (urlParam) originalModelUrl = urlParam
       }
+
+      console.log("[v0] Original model URL for rigging:", originalModelUrl)
 
       // Start rigging
       const rigResponse = await fetch('/api/meshy/rigging', {
@@ -224,12 +230,15 @@ function WorldPageContent() {
       }
 
       const { taskId } = await rigResponse.json()
+      console.log("[v0] Rigging task started with ID:", taskId)
 
       // Poll for completion
       const pollInterval = setInterval(async () => {
         try {
+          console.log("[v0] Polling rigging status for task:", taskId)
           const statusResponse = await fetch(`/api/meshy/rigging/${taskId}`)
           const status = await statusResponse.json()
+          console.log("[v0] Rigging status:", status)
 
           setRiggingProgress(status.progress || 0)
 
