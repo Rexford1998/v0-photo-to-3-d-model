@@ -73,22 +73,19 @@ function WorldPageContent() {
   const [generatedAnimations, setGeneratedAnimations] = useState<GeneratedAnimation[]>([])
   const [animationPanelOpen, setAnimationPanelOpen] = useState(false)
   const [activeAnimationUrl, setActiveAnimationUrl] = useState<string | null>(null)
-  const [availableAnimations, setAvailableAnimations] = useState<string[]>([])
-  const [currentAnimation, setCurrentAnimation] = useState<string>("")
-
 
   // Load saved animations from user's player data
   useEffect(() => {
     const loadAnimations = async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
-
+      
       if (user) {
         const { data: savedAnimations } = await supabase
           .from('player_animations')
           .select('animation_id, animation_name, animation_url')
           .eq('user_id', user.id)
-
+        
         if (savedAnimations && savedAnimations.length > 0) {
           setGeneratedAnimations(savedAnimations.map(a => ({
             id: a.animation_id,
@@ -98,35 +95,35 @@ function WorldPageContent() {
         }
       }
     }
-
+    
     loadAnimations()
   }, [])
 
   // Load available animations from the model
   useEffect(() => {
     if (!modelUrl) return
-
+    
     const loadAnimations = async () => {
       try {
         // Fetch the model to extract animation names
-        const proxiedUrl = modelUrl.startsWith("/api/proxy-model") || modelUrl.startsWith("/")
-          ? modelUrl
+        const proxiedUrl = modelUrl.startsWith("/api/proxy-model") || modelUrl.startsWith("/") 
+          ? modelUrl 
           : `/api/proxy-model?url=${encodeURIComponent(modelUrl)}`
-
+        
         const response = await fetch(proxiedUrl)
         const arrayBuffer = await response.arrayBuffer()
-
+        
         // Parse GLB to extract animation names using minimal parsing
         const dataView = new DataView(arrayBuffer)
         const decoder = new TextDecoder()
-
+        
         // GLB structure: 12 byte header, then chunks
         // We need to find the JSON chunk and parse it for animation names
         if (arrayBuffer.byteLength > 20) {
           const jsonLength = dataView.getUint32(12, true)
           const jsonData = decoder.decode(new Uint8Array(arrayBuffer, 20, jsonLength))
           const gltf = JSON.parse(jsonData)
-
+          
           if (gltf.animations && gltf.animations.length > 0) {
             const animNames = gltf.animations.map((a: { name?: string }, i: number) => a.name || `Animation ${i + 1}`)
             setAvailableAnimations(animNames)
@@ -137,7 +134,7 @@ function WorldPageContent() {
         console.error("Failed to load animations:", err)
       }
     }
-
+    
     loadAnimations()
   }, [modelUrl])
 
@@ -260,11 +257,11 @@ function WorldPageContent() {
       {/* 3D Canvas */}
       <div className="flex-1">
         <Suspense fallback={<div className="flex items-center justify-center h-full w-full">Loading 3D world...</div>}>
-          <WorldScene
-            players={players}
-            localPlayerId={playerId}
-            modelUrl={activeAnimationUrl || modelUrl}
-            onPositionChange={updatePosition}
+          <WorldScene 
+            players={players} 
+            localPlayerId={playerId} 
+            modelUrl={activeAnimationUrl || modelUrl} 
+            onPositionChange={updatePosition} 
           />
         </Suspense>
       </div>
@@ -288,7 +285,7 @@ function WorldPageContent() {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">Use WASD or Arrow Keys to move</p>
-
+          
           {/* Animation Selector */}
           {availableAnimations.length > 0 && (
             <div className="space-y-2">
@@ -325,7 +322,7 @@ function WorldPageContent() {
               </div>
               {animationPanelOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </button>
-
+            
             {animationPanelOpen && (
               <div className="px-4 pb-4 space-y-2">
                 {/* Use Base Model Button */}
@@ -334,10 +331,11 @@ function WorldPageContent() {
                     setActiveAnimationUrl(null)
                     updateAnimation(null)
                   }}
-                  className={`w-full p-2 rounded-lg text-left text-sm flex items-center gap-2 transition-colors ${!activeAnimationUrl
-                      ? "bg-primary text-primary-foreground"
+                  className={`w-full p-2 rounded-lg text-left text-sm flex items-center gap-2 transition-colors ${
+                    !activeAnimationUrl 
+                      ? "bg-primary text-primary-foreground" 
                       : "bg-secondary hover:bg-secondary/80"
-                    }`}
+                  }`}
                 >
                   <RotateCcw className="h-3 w-3" />
                   Base Model
@@ -351,10 +349,11 @@ function WorldPageContent() {
                       setActiveAnimationUrl(anim.modelUrl)
                       updateAnimation(anim.modelUrl)
                     }}
-                    className={`w-full p-2 rounded-lg text-left text-sm flex items-center gap-2 transition-colors ${activeAnimationUrl === anim.modelUrl
-                        ? "bg-primary text-primary-foreground"
+                    className={`w-full p-2 rounded-lg text-left text-sm flex items-center gap-2 transition-colors ${
+                      activeAnimationUrl === anim.modelUrl 
+                        ? "bg-primary text-primary-foreground" 
                         : "bg-secondary hover:bg-secondary/80"
-                      }`}
+                    }`}
                   >
                     <Play className="h-3 w-3" />
                     {anim.name}
