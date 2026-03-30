@@ -7,6 +7,7 @@ import { ImageUpload } from "@/components/image-upload"
 import { ModelUpload } from "@/components/model-upload"
 import { AnimationGenerator } from "@/components/animation-generator"
 import { ProgressSteps } from "@/components/progress-steps"
+import { RigGuideEditor, type RigGuidePoints } from "@/components/rig-guide-editor"
 import { useMeshy } from "@/hooks/use-meshy"
 import { Button } from "@/components/ui/button"
 import { Sparkles, RotateCcw, Zap, Package, Play, Gamepad2, LogIn, UserPlus, LogOut, User } from "lucide-react"
@@ -41,6 +42,12 @@ export default function Home() {
   const [user, setUser] = useState<SupabaseUser | null>(null)
   const [savedModelUrl, setSavedModelUrl] = useState<string | null>(null)
   const [isLoadingUser, setIsLoadingUser] = useState(true)
+  const [isUploadingModel, setIsUploadingModel] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [uploadedRigTaskId, setUploadedRigTaskId] = useState<string | null>(null)
+  const [uploadedAnimationUrl, setUploadedAnimationUrl] = useState<string | null>(null)
+  const [showRigGuideEditor, setShowRigGuideEditor] = useState(false)
+  const [rigGuidePoints, setRigGuidePoints] = useState<RigGuidePoints>({})
   
   const {
     stage,
@@ -123,27 +130,141 @@ export default function Home() {
 
   const handleImageSelect = (dataUrl: string) => {
     setSelectedImage(dataUrl)
+    setRigGuidePoints({})
   }
 
   const handleGenerate = async () => {
     if (selectedImage) {
-      await generateModel(selectedImage)
+      await generateModel(selectedImage, { rigGuidePoints })
     }
   }
 
   const handleReset = () => {
     setSelectedImage(null)
     setUploadedModelUrl(null)
+    setUploadedRigTaskId(null)
+    setUploadedAnimationUrl(null)
+    setUploadError(null)
+    setShowRigGuideEditor(false)
+    setRigGuidePoints({})
     reset()
   }
 
-  const handleModelUpload = (_file: File, url: string) => {
-    setUploadedModelUrl(url)
+  const pollUploadedRiggingTask = async (taskId: string) => {
+    const maxAttempts = 120
+    let attempts = 0
+
+    while (attempts < maxAttempts) {
+      const response = await fetch(`/api/meshy/rigging/${taskId}`)
+      if (!response.ok) throw new Error("Failed to fetch rigging task status")
+
+      const task = await response.json()
+
+      if (task.status === "SUCCEEDED") {
+        return task
+      }
+
+      if (task.status === "FAILED" || task.status === "CANCELED") {
+        throw new Error(task.error || "Rigging task failed")
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 5000))
+      attempts++
+    }
+
+    throw new Error("Rigging task timed out")
   }
 
-  const isProcessing = stage === "generating" || stage === "rigging" || stage === "uploading"
+  const startRiggingForUploadedModel = async (url: string) => {
+    try {
+      const riggingResponse = await fetch("/api/meshy/rigging", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ modelUrl: url }),
+      })
+
+      if (!riggingResponse.ok) {
+        const errorData = await riggingResponse.json().catch(() => null)
+        throw new Error(errorData?.error || "Failed to start rigging")
+      }
+
+      const riggingData = await riggingResponse.json()
+      if (!riggingData.taskId) {
+        throw new Error("Rigging did not return a task ID")
+      }
+
+      setUploadedRigTaskId(riggingData.taskId)
+
+      const riggingTask = await pollUploadedRiggingTask(riggingData.taskId)
+      if (riggingTask.result?.basic_animations?.walking_glb_url) {
+        setUploadedAnimationUrl(riggingTask.result.basic_animations.walking_glb_url)
+      } else if (riggingTask.result?.rigged_character_glb_url) {
+        setUploadedAnimationUrl(riggingTask.result.rigged_character_glb_url)
+      }
+    } catch (riggingError) {
+      console.warn("[v0] Uploaded model rigging failed:", riggingError)
+      setUploadError(riggingError instanceof Error ? riggingError.message : "Rigging failed for uploaded model")
+    }
+  }
+
+  const handleModelUpload = async (file: File, localUrl: string) => {
+    setUploadedModelUrl(localUrl)
+    setUploadedRigTaskId(null)
+    setUploadedAnimationUrl(null)
+    setUploadError(null)
+
+    if (!user) {
+      return
+    }
+
+    setIsUploadingModel(true)
+
+    try {
+      const supabase = createClient()
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_")
+      const filePath = `${user.id}/${Date.now()}-${safeName}`
+
+      const { error: uploadStorageError } = await supabase
+        .storage
+        .from("models")
+        .upload(filePath, file, {
+          upsert: false,
+          contentType: file.type || "model/gltf-binary",
+        })
+
+      if (uploadStorageError) {
+        throw new Error(`Failed to upload model: ${uploadStorageError.message}`)
+      }
+
+      const { data: publicData } = supabase.storage.from("models").getPublicUrl(filePath)
+      const publicUrl = publicData.publicUrl
+      setUploadedModelUrl(publicUrl)
+
+      await supabase
+        .from('players')
+        .upsert({
+          user_id: user.id,
+          model_url: publicUrl,
+          nickname: user.email?.split('@')[0] || 'Player',
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id' })
+
+      setSavedModelUrl(publicUrl)
+
+      await startRiggingForUploadedModel(publicUrl)
+    } catch (uploadErr) {
+      console.error("[v0] Model upload failed:", uploadErr)
+      setUploadError(uploadErr instanceof Error ? uploadErr.message : "Failed to upload model")
+    } finally {
+      setIsUploadingModel(false)
+    }
+  }
+
+  const isProcessing = stage === "generating" || stage === "rigging" || stage === "uploading" || isUploadingModel
   const showModel = (stage === "complete" && modelUrl) || uploadedModelUrl
   const displayModelUrl = uploadedModelUrl || modelUrl
+  const displayAnimationUrl = uploadedModelUrl ? uploadedAnimationUrl : animationUrl
+  const displayRigTaskId = uploadedModelUrl ? uploadedRigTaskId : rigTaskId
 
   return (
     <main className="min-h-screen bg-background">
@@ -217,6 +338,28 @@ export default function Home() {
                 onImageSelect={handleImageSelect}
                 disabled={isProcessing}
               />
+
+              {selectedImage && (
+                <div className="space-y-3">
+                  <label className="flex items-center gap-2 text-sm text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={showRigGuideEditor}
+                      onChange={(e) => setShowRigGuideEditor(e.target.checked)}
+                      className="h-4 w-4"
+                    />
+                    Enable rigging guide preview and joint placement
+                  </label>
+
+                  {showRigGuideEditor && (
+                    <RigGuideEditor
+                      imageUrl={selectedImage}
+                      points={rigGuidePoints}
+                      onChange={setRigGuidePoints}
+                    />
+                  )}
+                </div>
+              )}
 
               <div className="flex gap-3">
                 <Button
@@ -316,7 +459,7 @@ export default function Home() {
               <div>
                 <h2 className="text-2xl font-bold text-foreground">Your 3D Character</h2>
                 <p className="text-muted-foreground">
-                  {animationUrl 
+                  {displayAnimationUrl 
                     ? "Your character is now walking! Interact with the 3D view below."
                     : "Your 3D model is ready. Drag to rotate, scroll to zoom."}
                 </p>
@@ -328,19 +471,20 @@ export default function Home() {
             </div>
 
             <div className="aspect-[4/3] overflow-hidden rounded-2xl border border-border shadow-xl">
-              <ModelViewer modelUrl={displayModelUrl!} animationUrl={animationUrl || undefined} />
+              <ModelViewer modelUrl={displayModelUrl!} animationUrl={displayAnimationUrl || undefined} />
             </div>
 
             {uploadedModelUrl && (
               <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-blue-500/10 p-3 text-sm text-blue-600 mt-4">
                 <div className="flex items-center gap-2">
                   <Package className="h-4 w-4" />
-                  <strong>Test Model Loaded:</strong> This is a locally uploaded model for testing.
+                  <strong>Uploaded model loaded:</strong> Your uploaded model can be rigged, animated, and saved.
                 </div>
+                {!user && <p className="text-xs">Log in to save this uploaded model and generate animations.</p>}
               </div>
             )}
 
-            {animationUrl && !uploadedModelUrl && (
+            {displayAnimationUrl && (
               <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-accent/10 p-3 text-sm text-accent mt-4">
                 <div className="flex items-center gap-2">
                   <Play className="h-4 w-4" />
@@ -349,16 +493,22 @@ export default function Home() {
               </div>
             )}
 
+            {uploadError && (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700">
+                {uploadError}
+              </div>
+            )}
+
             {/* Animation Generation Section - shown after model is ready */}
-            {displayModelUrl && rigTaskId && user && (
-              <AnimationGenerator rigTaskId={rigTaskId} userId={user.id} />
+            {displayModelUrl && displayRigTaskId && user && (
+              <AnimationGenerator rigTaskId={displayRigTaskId} userId={user.id} />
             )}
 
             {displayModelUrl && (
               <div className="flex flex-col items-center gap-4 mt-6">
                 {user ? (
                   <>
-                    {!uploadedModelUrl && <p className="text-sm text-green-600">Model saved to your account!</p>}
+                    {!isUploadingModel && <p className="text-sm text-green-600">Model saved to your account!</p>}
                     <Link href={`/world?modelUrl=${encodeURIComponent(displayModelUrl)}`}>
                       <Button size="lg" className="h-12 px-8 text-base font-semibold bg-green-600 hover:bg-green-700">
                         <Gamepad2 className="mr-2 h-5 w-5" />

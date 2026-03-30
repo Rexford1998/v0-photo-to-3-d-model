@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { imageUrl } = await request.json()
+    const { imageUrl, rigGuidePoints } = await request.json()
 
     if (!imageUrl || typeof imageUrl !== "string") {
       return NextResponse.json(
@@ -46,6 +46,10 @@ export async function POST(request: NextRequest) {
         { error: "Image URL must be a data URL or HTTP URL" },
         { status: 400 }
       )
+    }
+
+    if (rigGuidePoints && typeof rigGuidePoints === "object") {
+      console.log("[v0] Rig guide points received:", rigGuidePoints)
     }
 
     const response = await fetch("https://api.meshy.ai/openapi/v1/image-to-3d", {
