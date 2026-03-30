@@ -164,13 +164,15 @@ function HomeContent() {
             {user ? (
               <>
                 <span className="text-sm text-muted-foreground">{user.email}</span>
-                {savedCharacter && (
+                {savedCharacter ? (
                   <Link href={`/world?modelUrl=${encodeURIComponent(savedCharacter.model_url)}`}>
-                    <Button size="sm" variant="outline">
+                    <Button size="sm" className="bg-green-600 hover:bg-green-700">
                       <Gamepad2 className="mr-2 h-4 w-4" />
-                      Play with Saved Character
+                      Enter Multiplayer
                     </Button>
                   </Link>
+                ) : (
+                  <span className="text-xs text-muted-foreground">Generate a model to play</span>
                 )}
                 <Button size="sm" variant="ghost" onClick={handleLogout}>
                   <LogOut className="h-4 w-4" />
