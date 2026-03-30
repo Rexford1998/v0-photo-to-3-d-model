@@ -104,7 +104,7 @@ function GLBModel({ animatedUrl, originalUrl, isMoving }: { animatedUrl: string;
     cloned.position.z = -center.z
     
     return cloned
-  }, [scene])
+  }, [animatedScene, originalScene, proxiedAnimatedUrl, proxiedOriginalUrl])
   
   // Bind animations directly to the scaled clone
   const { actions, names } = useAnimations(animations, scaledClone)
