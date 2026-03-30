@@ -235,6 +235,38 @@ export default function Home() {
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_")
       const filePath = `${user.id}/${Date.now()}-${safeName}`
 
+      const candidateBuckets = ["models", "model_uploads", "uploads"]
+      let uploadedBucket: string | null = null
+      let lastUploadError: string | null = null
+
+      for (const bucket of candidateBuckets) {
+        const { error: uploadStorageError } = await supabase
+          .storage
+          .from(bucket)
+          .upload(filePath, file, {
+            upsert: false,
+            contentType: file.type || "model/gltf-binary",
+          })
+
+        if (!uploadStorageError) {
+          uploadedBucket = bucket
+          break
+        }
+
+        lastUploadError = uploadStorageError.message
+        const bucketMissing = uploadStorageError.message.toLowerCase().includes("bucket not found")
+        if (!bucketMissing) {
+          throw new Error(`Failed to upload model: ${uploadStorageError.message}`)
+        }
+      }
+
+      if (!uploadedBucket) {
+        throw new Error(
+          `Failed to upload model: ${lastUploadError || "No compatible storage bucket found"}. Create a public bucket named \"models\" (or \"model_uploads\").`
+        )
+      }
+
+      const { data: publicData } = supabase.storage.from(uploadedBucket).getPublicUrl(filePath)
       const { error: uploadStorageError } = await supabase
         .storage
         .from("models")
@@ -492,6 +524,15 @@ export default function Home() {
                   <strong>Uploaded model loaded:</strong> Your uploaded model can be rigged, animated, and saved.
                 </div>
                 {!user && <p className="text-xs">Log in to save this uploaded model and generate animations.</p>}
+              </div>
+            )}
+
+            {uploadedModelUrl && uploadedRigTaskId && user && (
+              <div className="rounded-xl border border-green-500/30 bg-green-500/10 p-3 text-sm text-green-700 text-center">
+                Rigging saved to your player profile. Generate animations below to save them to your account.
+              </div>
+            )}
+
               </div>
             )}
 

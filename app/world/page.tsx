@@ -56,6 +56,7 @@ function WorldPageContent() {
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [selectedCountry, setSelectedCountry] = useState("United States")
   const [joinedCountry, setJoinedCountry] = useState<string | null>(null)
+  const [countryOptions, setCountryOptions] = useState<string[]>(["United States"])
 
   // Get user email for default nickname
   useEffect(() => {
@@ -78,6 +79,27 @@ function WorldPageContent() {
   const [availableAnimations, setAvailableAnimations] = useState<string[]>([])
   const [currentAnimation, setCurrentAnimation] = useState("")
 
+  useEffect(() => {
+    const loadCountries = async () => {
+      try {
+        const response = await fetch("https://restcountries.com/v3.1/all?fields=name")
+        if (!response.ok) throw new Error("Failed to load country list")
+
+        const data = await response.json()
+        const countries = (data as Array<{ name?: { common?: string } }>)
+          .map((item) => item.name?.common)
+          .filter((name): name is string => Boolean(name))
+          .sort((a, b) => a.localeCompare(b))
+
+        if (countries.length > 0) {
+          setCountryOptions(countries)
+        }
+      } catch (error) {
+        console.warn("Failed to load countries, using fallback list:", error)
+      }
+    }
+
+    loadCountries()
   const countryOptions = useMemo(() => {
     const supportedValuesOf = (Intl as any).supportedValuesOf as ((type: string) => string[]) | undefined
     if (!supportedValuesOf) return ["United States"]
