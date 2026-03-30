@@ -107,9 +107,9 @@ function HomeContent() {
     return () => subscription.unsubscribe()
   }, [])
 
-  // Save character when model is generated and user is logged in
-  const saveCharacter = async () => {
-    if (!user || !modelUrl) return
+  // Save character to database
+  const saveCharacter = async (urlToSave: string) => {
+    if (!user || !urlToSave) return
     
     setIsSaving(true)
     const supabase = createClient()
@@ -118,15 +118,25 @@ function HomeContent() {
       .from('user_characters')
       .upsert({
         user_id: user.id,
-        model_url: modelUrl,
+        model_url: urlToSave,
         updated_at: new Date().toISOString()
       }, { onConflict: 'user_id' })
     
     if (!error) {
-      setSavedCharacter({ model_url: modelUrl, nickname: null })
+      setSavedCharacter({ model_url: urlToSave, nickname: null })
     }
     setIsSaving(false)
   }
+
+  // Auto-save model when generation completes and user is logged in
+  useEffect(() => {
+    if (stage === "complete" && modelUrl && user && !isSaving) {
+      // Only save if this is a newly generated model (not a restored one)
+      if (savedCharacter?.model_url !== modelUrl) {
+        saveCharacter(modelUrl)
+      }
+    }
+  }, [stage, modelUrl, user])
 
   const handleLogout = async () => {
     const supabase = createClient()
@@ -367,12 +377,12 @@ function HomeContent() {
                       </Button>
                     </div>
                     
-                    {savedCharacter?.model_url === modelUrl ? (
-                      <p className="text-center text-sm text-green-600">Character saved!</p>
+                    {isSaving ? (
+                      <p className="text-center text-sm text-muted-foreground">Saving character...</p>
+                    ) : savedCharacter?.model_url === modelUrl ? (
+                      <p className="text-center text-sm text-green-600">Character saved to your account!</p>
                     ) : (
-                      <Button onClick={saveCharacter} disabled={isSaving} className="w-full">
-                        {isSaving ? "Saving..." : "Save Character"}
-                      </Button>
+                      <p className="text-center text-sm text-muted-foreground">Saving character...</p>
                     )}
                     
                     <Link href={`/world?modelUrl=${encodeURIComponent(modelUrl)}`} className="block">
