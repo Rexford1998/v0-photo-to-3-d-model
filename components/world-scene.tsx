@@ -43,7 +43,7 @@ function CapsuleAvatar({ color }: { color: string }) {
 }
 
 // GLB Model loader component with animation support
-function GLBModel({ modelUrl, currentAnimation, isMoving }: { modelUrl: string; currentAnimation?: string; isMoving?: boolean }) {
+function GLBModel({ modelUrl, isMoving }: { modelUrl: string; isMoving?: boolean }) {
   const groupRef = useRef<THREE.Group>(null)
   const proxiedUrl = getProxiedUrl(modelUrl)
   const { scene, animations } = useGLTF(proxiedUrl)
@@ -52,41 +52,34 @@ function GLBModel({ modelUrl, currentAnimation, isMoving }: { modelUrl: string; 
   const clone = useMemo(() => SkeletonUtils.clone(scene), [scene])
   const { actions, names } = useAnimations(animations, groupRef)
   
-  // Handle animation changes
+  // Auto-play the first animation when model loads (Meshy bakes animation into the GLB)
   useEffect(() => {
-    if (!actions || names.length === 0) return
+    console.log("[v0] GLBModel animations found:", names)
     
-    // Stop all current actions
-    Object.values(actions).forEach(action => action?.stop())
+    if (!actions || names.length === 0) {
+      console.log("[v0] No animations in this model")
+      return
+    }
     
-    // Play the selected animation or first available
-    const animationToPlay = currentAnimation && actions[currentAnimation] 
-      ? currentAnimation 
-      : names[0]
+    // Play the first animation (Meshy models have one baked animation)
+    const animationToPlay = names[0]
+    console.log("[v0] Playing animation:", animationToPlay)
     
     if (animationToPlay && actions[animationToPlay]) {
       const action = actions[animationToPlay]
       action?.reset().fadeIn(0.3).play()
-      
-      // Adjust timeScale based on movement (for walk/run animations)
-      if (isMoving !== undefined) {
-        action!.timeScale = isMoving ? 1 : 0
-      }
+      // Always play at full speed - animation is already baked
+      action!.timeScale = 1
     }
-  }, [actions, names, currentAnimation, isMoving])
+  }, [actions, names])
   
-  // Update animation speed based on movement
+  // Optionally adjust speed based on movement (for walk animations)
   useFrame(() => {
-    if (isMoving !== undefined && actions && names.length > 0) {
-      const animationToPlay = currentAnimation && actions[currentAnimation] 
-        ? currentAnimation 
-        : names[0]
-      
-      if (animationToPlay && actions[animationToPlay]) {
-        const action = actions[animationToPlay]
-        if (action) {
-          action.timeScale = THREE.MathUtils.lerp(action.timeScale, isMoving ? 1.2 : 0, 0.1)
-        }
+    if (actions && names.length > 0 && names[0] && actions[names[0]]) {
+      const action = actions[names[0]]
+      if (action && isMoving !== undefined) {
+        // Slow down when not moving, speed up when moving
+        action.timeScale = THREE.MathUtils.lerp(action.timeScale, isMoving ? 1.2 : 0.3, 0.1)
       }
     }
   })
@@ -131,7 +124,7 @@ export function useModelAnimations(modelUrl: string): string[] {
 }
 
 // Player model wrapper - renders GLB or fallback
-function PlayerModel({ modelUrl, color, currentAnimation, isMoving }: { modelUrl?: string; color: string; currentAnimation?: string; isMoving?: boolean }) {
+function PlayerModel({ modelUrl, color, isMoving }: { modelUrl?: string; color: string; isMoving?: boolean }) {
   if (!modelUrl) {
     return <CapsuleAvatar color={color} />
   }
@@ -139,7 +132,7 @@ function PlayerModel({ modelUrl, color, currentAnimation, isMoving }: { modelUrl
   return (
     <ErrorBoundaryModel fallback={<CapsuleAvatar color={color} />}>
       <React.Suspense fallback={<CapsuleAvatar color={color} />}>
-        <GLBModel modelUrl={modelUrl} currentAnimation={currentAnimation} isMoving={isMoving} />
+        <GLBModel modelUrl={modelUrl} isMoving={isMoving} />
       </React.Suspense>
     </ErrorBoundaryModel>
   )
@@ -199,7 +192,7 @@ function OtherPlayerCharacter({ player }: { player: Player }) {
 }
 
 // Local player character that we control
-function LocalPlayerCharacter({ player, positionRef, rotationRef, modelUrl, currentAnimation, isMovingRef }: { player: Player; positionRef: React.MutableRefObject<{x: number, z: number}>; rotationRef: React.MutableRefObject<number>; modelUrl: string; currentAnimation?: string; isMovingRef: React.MutableRefObject<boolean> }) {
+function LocalPlayerCharacter({ player, positionRef, rotationRef, modelUrl, isMovingRef }: { player: Player; positionRef: React.MutableRefObject<{x: number, z: number}>; rotationRef: React.MutableRefObject<number>; modelUrl: string; isMovingRef: React.MutableRefObject<boolean> }) {
   const groupRef = useRef<THREE.Group>(null)
   const [isMoving, setIsMoving] = useState(false)
 
@@ -215,7 +208,7 @@ function LocalPlayerCharacter({ player, positionRef, rotationRef, modelUrl, curr
 
   return (
     <group ref={groupRef} position={[positionRef.current.x, 0, positionRef.current.z]}>
-      <PlayerModel modelUrl={modelUrl || player.model_url} color={player.color} currentAnimation={currentAnimation} isMoving={isMoving} />
+      <PlayerModel modelUrl={modelUrl || player.model_url} color={player.color} isMoving={isMoving} />
 
       {/* Name label */}
       <Html position={[0, 1.8, 0]} center>
@@ -228,7 +221,7 @@ function LocalPlayerCharacter({ player, positionRef, rotationRef, modelUrl, curr
 }
 
 // Main scene
-function Scene({ players, localPlayerId, modelUrl, onPositionChange, currentAnimation }: { players: Player[]; localPlayerId: string | null; modelUrl: string; onPositionChange: (x: number, z: number, rotation: number) => void; currentAnimation?: string }) {
+function Scene({ players, localPlayerId, modelUrl, onPositionChange }: { players: Player[]; localPlayerId: string | null; modelUrl: string; onPositionChange: (x: number, z: number, rotation: number) => void }) {
   const cameraRef = useRef<THREE.PerspectiveCamera>(null)
   const localPlayer = players.find((p) => p.id === localPlayerId)
   const keysPressed = useRef<{ [key: string]: boolean }>({})
@@ -326,7 +319,7 @@ function Scene({ players, localPlayerId, modelUrl, onPositionChange, currentAnim
       {/* Players */}
       {players.map((player) => (
         player.id === localPlayerId ? (
-          <LocalPlayerCharacter key={player.id} player={player} positionRef={positionRef} rotationRef={rotationRef} modelUrl={modelUrl} currentAnimation={currentAnimation} isMovingRef={isMovingRef} />
+          <LocalPlayerCharacter key={player.id} player={player} positionRef={positionRef} rotationRef={rotationRef} modelUrl={modelUrl} isMovingRef={isMovingRef} />
         ) : (
           <OtherPlayerCharacter key={player.id} player={player} />
         )
@@ -346,14 +339,13 @@ interface WorldSceneProps {
   localPlayerId: string | null
   modelUrl: string
   onPositionChange: (x: number, z: number, rotation: number) => void
-  currentAnimation?: string
 }
 
-export default function WorldScene({ players, localPlayerId, modelUrl, onPositionChange, currentAnimation }: WorldSceneProps) {
+export default function WorldScene({ players, localPlayerId, modelUrl, onPositionChange }: WorldSceneProps) {
   return (
     <div className="w-full h-screen">
       <Canvas shadows>
-        <Scene players={players} localPlayerId={localPlayerId} modelUrl={modelUrl} onPositionChange={onPositionChange} currentAnimation={currentAnimation} />
+        <Scene players={players} localPlayerId={localPlayerId} modelUrl={modelUrl} onPositionChange={onPositionChange} />
       </Canvas>
     </div>
   )

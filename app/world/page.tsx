@@ -423,7 +423,6 @@ function WorldPageContent() {
             localPlayerId={playerId} 
             modelUrl={activeAnimationUrl || modelUrl} 
             onPositionChange={updatePosition} 
-            currentAnimation={currentAnimation} 
           />
         </Suspense>
       </div>
