@@ -306,7 +306,7 @@ function WorldPageContent() {
               Leave
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">Use WASD or Arrow Keys to move</p>
+          <p className="text-xs text-muted-foreground">Use Arrow Keys to move</p>
           
           {/* Animation Selector */}
           {availableAnimations.length > 0 && (

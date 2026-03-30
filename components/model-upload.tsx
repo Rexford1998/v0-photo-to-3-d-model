@@ -88,7 +88,7 @@ export function ModelUpload({ onModelSelect, disabled }: ModelUploadProps) {
               {isDragActive ? "Drop your model here" : "Or upload a GLB/GLTF model"}
             </p>
             <p className="text-xs text-muted-foreground">
-              For testing without generating
+              Preview, rig for animation, and save to your account
             </p>
           </div>
         </div>
