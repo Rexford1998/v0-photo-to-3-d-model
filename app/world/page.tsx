@@ -311,6 +311,11 @@ function WorldPageContent() {
           const statusResponse = await fetch(`/api/meshy/animation/${taskId}`)
           const status = await statusResponse.json()
           console.log("[v0] Animation status:", status)
+          
+          // Debug: Log the raw Meshy response to see where the URL actually is
+          if (status._debug_raw) {
+            console.log("[v0] RAW MESHY RESPONSE:", JSON.stringify(status._debug_raw, null, 2))
+          }
 
           setAnimationProgress(status.progress || 0)
 
