@@ -49,6 +49,9 @@ function GLBModel({ modelUrl, isMoving }: { modelUrl: string; isMoving?: boolean
   const proxiedUrl = getProxiedUrl(modelUrl)
   const { scene, animations } = useGLTF(proxiedUrl)
   
+  // Check if this is a Meshy animation URL (they use a different scale)
+  const isMeshyAnimation = modelUrl.includes('assets.meshy.ai') && modelUrl.includes('animation')
+  
   // Clone and scale the scene, memoized per scene change
   const scaledClone = useMemo(() => {
     const cloned = SkeletonUtils.clone(scene)
@@ -63,9 +66,17 @@ function GLBModel({ modelUrl, isMoving }: { modelUrl: string; isMoving?: boolean
     const size = box.getSize(new THREE.Vector3())
     const height = size.y || 1
     const targetHeight = 1.5
-    // Clamp scale between 0.005 and 5 to handle both tiny and huge models
-    const rawScale = targetHeight / height
-    const scale = Math.max(0.005, Math.min(rawScale, 5))
+    
+    let scale: number
+    if (isMeshyAnimation) {
+      // Meshy animated models are typically in centimeters (100x larger)
+      // Use a fixed scale that matches the original model
+      scale = 0.015
+    } else {
+      // Regular models - calculate based on height
+      const rawScale = targetHeight / height
+      scale = Math.max(0.005, Math.min(rawScale, 5))
+    }
     cloned.scale.setScalar(scale)
     
     // Center the model
@@ -76,7 +87,7 @@ function GLBModel({ modelUrl, isMoving }: { modelUrl: string; isMoving?: boolean
     cloned.position.z = -center.z
     
     return cloned
-  }, [scene])
+  }, [scene, isMeshyAnimation])
   
   // Bind animations directly to the scaled clone
   const { actions, names } = useAnimations(animations, scaledClone)
