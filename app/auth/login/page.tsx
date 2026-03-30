@@ -31,12 +31,30 @@ function LoginForm() {
     setError(null)
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
+      
       if (error) throw error
-      router.push(returnTo)
+      
+      if (!data.session) {
+        throw new Error("Login succeeded but no session was created. Please try again.")
+      }
+      
+      // Wait a moment for cookies to be set by @supabase/ssr
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // Decode the returnTo URL in case it was double-encoded
+      let decodedReturnTo = returnTo
+      try {
+        decodedReturnTo = decodeURIComponent(returnTo)
+      } catch {
+        // Use as-is if decoding fails
+      }
+      
+      // Use window.location for a full page navigation to ensure auth cookies are set
+      window.location.href = decodedReturnTo
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : 'An error occurred')
     } finally {

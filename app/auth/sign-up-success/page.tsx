@@ -1,9 +1,17 @@
+'use client'
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
-import { Mail } from 'lucide-react'
+import { Mail, Gamepad2 } from 'lucide-react'
+import { useSearchParams } from 'next/navigation'
+import { Suspense } from 'react'
 
-export default function SignUpSuccessPage() {
+function SignUpSuccessContent() {
+  const searchParams = useSearchParams()
+  const returnTo = searchParams.get('returnTo')
+  const isWorldRedirect = returnTo?.startsWith('/world')
+
   return (
     <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
       <div className="w-full max-w-sm">
@@ -21,8 +29,11 @@ export default function SignUpSuccessPage() {
             <p className="text-center text-sm text-muted-foreground">
               After confirming your email, you can log in and join the multiplayer world.
             </p>
-            <Link href="/auth/login">
-              <Button className="w-full">Back to Login</Button>
+            <Link href={`/auth/login${returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : ''}`}>
+              <Button className="w-full">
+                {isWorldRedirect && <Gamepad2 className="mr-2 h-4 w-4" />}
+                {isWorldRedirect ? 'Log in to Join World' : 'Back to Login'}
+              </Button>
             </Link>
             <Link href="/" className="text-center">
               <span className="text-sm text-muted-foreground hover:underline">Back to home</span>
@@ -31,5 +42,13 @@ export default function SignUpSuccessPage() {
         </Card>
       </div>
     </div>
+  )
+}
+
+export default function SignUpSuccessPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-svh items-center justify-center">Loading...</div>}>
+      <SignUpSuccessContent />
+    </Suspense>
   )
 }
