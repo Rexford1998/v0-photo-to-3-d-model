@@ -45,6 +45,7 @@ export default function Home() {
     progress,
     modelUrl,
     animationUrl,
+    rigTaskId,
     error,
     generateModel,
     reset,
@@ -92,12 +93,13 @@ export default function Home() {
       if (stage === "complete" && modelUrl && user) {
         const supabase = createClient()
         
-        // Upsert the player record with the new model
+        // Upsert the player record with the new model and rig task ID
         await supabase
           .from('players')
           .upsert({
             user_id: user.id,
             model_url: modelUrl,
+            rig_task_id: rigTaskId,
             nickname: user.email?.split('@')[0] || 'Player',
             updated_at: new Date().toISOString()
           }, { onConflict: 'user_id' })
@@ -107,7 +109,7 @@ export default function Home() {
     }
     
     saveModel()
-  }, [stage, modelUrl, user])
+  }, [stage, modelUrl, rigTaskId, user])
 
   const handleLogout = async () => {
     const supabase = createClient()
