@@ -257,11 +257,6 @@ function WorldPageContent() {
       {/* 3D Canvas */}
       <div className="flex-1">
         <Suspense fallback={<div className="flex items-center justify-center h-full w-full">Loading 3D world...</div>}>
-          <WorldScene 
-            players={players} 
-            localPlayerId={playerId} 
-            modelUrl={activeAnimationUrl || modelUrl} 
-            onPositionChange={updatePosition} 
           <WorldScene
             players={players}
             localPlayerId={playerId}
