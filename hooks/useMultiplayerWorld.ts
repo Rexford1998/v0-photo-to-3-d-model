@@ -14,6 +14,7 @@ interface Player {
   id: string
   nickname: string
   model_url?: string
+  animation_url?: string
   position_x: number
   position_y: number
   position_z: number
@@ -222,6 +223,25 @@ export function useMultiplayerWorld(modelUrl: string = "") {
     [playerId]
   )
 
+  const updateAnimation = useCallback(
+    async (animationUrl: string | null) => {
+      if (!playerId) return
+
+      try {
+        await supabase
+          .from("players")
+          .update({
+            animation_url: animationUrl,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", playerId)
+      } catch (err) {
+        console.error("[v0] Animation update error:", err)
+      }
+    },
+    [playerId]
+  )
+
   const leaveWorld = useCallback(async () => {
     if (!playerId) return
 
@@ -245,6 +265,7 @@ export function useMultiplayerWorld(modelUrl: string = "") {
     onlineCount,
     joinWorld,
     updatePosition,
+    updateAnimation,
     sendMessage,
     leaveWorld
   }
