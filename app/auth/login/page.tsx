@@ -47,6 +47,18 @@ function LoginForm() {
       
       if (error) throw error
       
+      if (!data.session) {
+        throw new Error("Login succeeded but no session was created. Please try again.")
+      }
+      
+      // Wait a moment for cookies to be set by @supabase/ssr
+      console.log("[v0] Waiting for session cookies to be set...")
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // Verify session is persisted
+      const { data: { session: verifiedSession } } = await supabase.auth.getSession()
+      console.log("[v0] Verified session:", verifiedSession ? "exists" : "null")
+      
       // Decode the returnTo URL in case it was double-encoded
       let decodedReturnTo = returnTo
       try {
