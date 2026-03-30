@@ -19,6 +19,9 @@ function WorldPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const modelUrl = searchParams.get("modelUrl")
+  
+  console.log("[v0] World page loaded, modelUrl:", modelUrl ? "present" : "missing", modelUrl?.substring(0, 50))
+  
   const [nickname, setNickname] = useState("")
   const [color, setColor] = useState("#3b82f6")
   const [isJoining, setIsJoining] = useState(false)
