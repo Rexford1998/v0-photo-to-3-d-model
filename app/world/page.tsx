@@ -281,12 +281,14 @@ function WorldPageContent() {
       return
     }
 
+    console.log("[v0] Starting animation generation:", { rigTaskId, actionId, animName })
     setIsGeneratingAnimation(true)
     setSelectedAnimationId(actionId)
     setAnimationProgress(0)
 
     try {
       // Start animation generation
+      console.log("[v0] Creating animation task...")
       const createResponse = await fetch("/api/meshy/animation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -295,20 +297,25 @@ function WorldPageContent() {
 
       if (!createResponse.ok) {
         const error = await createResponse.json()
+        console.error("[v0] Animation creation failed:", error)
         throw new Error(error.error || "Failed to start animation")
       }
 
       const { taskId } = await createResponse.json()
+      console.log("[v0] Animation task created:", taskId)
 
       // Poll for completion
       const pollInterval = setInterval(async () => {
         try {
+          console.log("[v0] Polling animation status for:", taskId)
           const statusResponse = await fetch(`/api/meshy/animation/${taskId}`)
           const status = await statusResponse.json()
+          console.log("[v0] Animation status:", status)
 
           setAnimationProgress(status.progress || 0)
 
           if (status.status === "SUCCEEDED" && status.modelUrl) {
+            console.log("[v0] Animation completed! Model URL:", status.modelUrl)
             clearInterval(pollInterval)
             setIsGeneratingAnimation(false)
             setSelectedAnimationId(null)
@@ -324,13 +331,14 @@ function WorldPageContent() {
             // Set as active animation
             setActiveAnimationUrl(status.modelUrl)
           } else if (status.status === "FAILED") {
+            console.error("[v0] Animation failed:", status.error)
             clearInterval(pollInterval)
             setIsGeneratingAnimation(false)
             setSelectedAnimationId(null)
             alert(`Animation failed: ${status.error || "Unknown error"}`)
           }
         } catch (err) {
-          console.error("Polling error:", err)
+          console.error("[v0] Polling error:", err)
         }
       }, 2000)
 

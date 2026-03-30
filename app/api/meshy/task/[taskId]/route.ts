@@ -4,7 +4,7 @@ const MESHY_API_KEY = process.env.MESHY_API_KEY
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ taskId: string }> }
 ) {
   if (!MESHY_API_KEY) {
     return NextResponse.json(
@@ -13,11 +13,11 @@ export async function GET(
     )
   }
 
-  const { id } = await params
+  const { taskId } = await params
 
   try {
     const response = await fetch(
-      `https://api.meshy.ai/openapi/v1/image-to-3d/${id}`,
+      `https://api.meshy.ai/openapi/v1/image-to-3d/${taskId}`,
       {
         headers: {
           "Authorization": `Bearer ${MESHY_API_KEY}`,
