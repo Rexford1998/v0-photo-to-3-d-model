@@ -4,9 +4,10 @@
 import { useSearchParams, useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { ArrowLeft, Send, Users, LogOut } from "lucide-react"
+import { ArrowLeft, Send, Users, LogOut, Play } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useMultiplayerWorld } from "@/hooks/useMultiplayerWorld"
 import { createClient } from "@/lib/supabase/client"
 import dynamic from "next/dynamic"
@@ -37,6 +38,47 @@ function WorldPageContent() {
   const [color, setColor] = useState("#3b82f6")
   const [isJoining, setIsJoining] = useState(false)
   const [chatInput, setChatInput] = useState("")
+  const [currentAnimation, setCurrentAnimation] = useState<string>("")
+  const [availableAnimations, setAvailableAnimations] = useState<string[]>([])
+
+  // Load available animations from the model
+  useEffect(() => {
+    if (!modelUrl) return
+    
+    const loadAnimations = async () => {
+      try {
+        // Fetch the model to extract animation names
+        const proxiedUrl = modelUrl.startsWith("/api/proxy-model") || modelUrl.startsWith("/") 
+          ? modelUrl 
+          : `/api/proxy-model?url=${encodeURIComponent(modelUrl)}`
+        
+        const response = await fetch(proxiedUrl)
+        const arrayBuffer = await response.arrayBuffer()
+        
+        // Parse GLB to extract animation names using minimal parsing
+        const dataView = new DataView(arrayBuffer)
+        const decoder = new TextDecoder()
+        
+        // GLB structure: 12 byte header, then chunks
+        // We need to find the JSON chunk and parse it for animation names
+        if (arrayBuffer.byteLength > 20) {
+          const jsonLength = dataView.getUint32(12, true)
+          const jsonData = decoder.decode(new Uint8Array(arrayBuffer, 20, jsonLength))
+          const gltf = JSON.parse(jsonData)
+          
+          if (gltf.animations && gltf.animations.length > 0) {
+            const animNames = gltf.animations.map((a: { name?: string }, i: number) => a.name || `Animation ${i + 1}`)
+            setAvailableAnimations(animNames)
+            setCurrentAnimation(animNames[0])
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load animations:", err)
+      }
+    }
+    
+    loadAnimations()
+  }, [modelUrl])
 
   const {
     playerId,
@@ -156,7 +198,7 @@ function WorldPageContent() {
       {/* 3D Canvas */}
       <div className="flex-1">
         <Suspense fallback={<div className="flex items-center justify-center h-full w-full">Loading 3D world...</div>}>
-          <WorldScene players={players} localPlayerId={playerId} modelUrl={modelUrl} onPositionChange={updatePosition} />
+          <WorldScene players={players} localPlayerId={playerId} modelUrl={modelUrl} onPositionChange={updatePosition} currentAnimation={currentAnimation} />
         </Suspense>
       </div>
 
@@ -179,6 +221,28 @@ function WorldPageContent() {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">Use WASD or Arrow Keys to move</p>
+          
+          {/* Animation Selector */}
+          {availableAnimations.length > 0 && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium flex items-center gap-2">
+                <Play className="h-4 w-4" />
+                Animation
+              </label>
+              <Select value={currentAnimation} onValueChange={setCurrentAnimation}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select animation" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableAnimations.map((anim) => (
+                    <SelectItem key={anim} value={anim}>
+                      {anim}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
 
         {/* Players List */}

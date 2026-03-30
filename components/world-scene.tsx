@@ -1,10 +1,10 @@
 "use client"
 
-import React, { useEffect, useRef, useState } from "react"
-import { Canvas, useFrame, useThree } from "@react-three/fiber"
-import { Html, PerspectiveCamera } from "@react-three/drei"
-import { useGLTF } from "@react-three/drei"
+import React, { useEffect, useRef, useState, useMemo } from "react"
+import { Canvas, useFrame, useGraph } from "@react-three/fiber"
+import { Html, PerspectiveCamera, useGLTF, useAnimations } from "@react-three/drei"
 import * as THREE from "three"
+import { SkeletonUtils } from "three-stdlib"
 
 interface Player {
   id: string
@@ -42,17 +42,57 @@ function CapsuleAvatar({ color }: { color: string }) {
   )
 }
 
-// GLB Model loader component
-function GLBModel({ modelUrl }: { modelUrl: string }) {
+// GLB Model loader component with animation support
+function GLBModel({ modelUrl, currentAnimation, isMoving }: { modelUrl: string; currentAnimation?: string; isMoving?: boolean }) {
   const groupRef = useRef<THREE.Group>(null)
   const proxiedUrl = getProxiedUrl(modelUrl)
-  const { scene } = useGLTF(proxiedUrl)
+  const { scene, animations } = useGLTF(proxiedUrl)
+  
+  // Clone scene to avoid mutation issues
+  const clone = useMemo(() => SkeletonUtils.clone(scene), [scene])
+  const { actions, names } = useAnimations(animations, groupRef)
+  
+  // Handle animation changes
+  useEffect(() => {
+    if (!actions || names.length === 0) return
+    
+    // Stop all current actions
+    Object.values(actions).forEach(action => action?.stop())
+    
+    // Play the selected animation or first available
+    const animationToPlay = currentAnimation && actions[currentAnimation] 
+      ? currentAnimation 
+      : names[0]
+    
+    if (animationToPlay && actions[animationToPlay]) {
+      const action = actions[animationToPlay]
+      action?.reset().fadeIn(0.3).play()
+      
+      // Adjust timeScale based on movement (for walk/run animations)
+      if (isMoving !== undefined) {
+        action!.timeScale = isMoving ? 1 : 0
+      }
+    }
+  }, [actions, names, currentAnimation, isMoving])
+  
+  // Update animation speed based on movement
+  useFrame(() => {
+    if (isMoving !== undefined && actions && names.length > 0) {
+      const animationToPlay = currentAnimation && actions[currentAnimation] 
+        ? currentAnimation 
+        : names[0]
+      
+      if (animationToPlay && actions[animationToPlay]) {
+        const action = actions[animationToPlay]
+        if (action) {
+          action.timeScale = THREE.MathUtils.lerp(action.timeScale, isMoving ? 1.2 : 0, 0.1)
+        }
+      }
+    }
+  })
   
   useEffect(() => {
-    if (!groupRef.current) return
-    
-    // Clone the scene for this instance
-    const cloned = scene.clone(true)
+    if (!groupRef.current || !clone) return
     
     // Clear any existing children
     while (groupRef.current.children.length > 0) {
@@ -60,27 +100,38 @@ function GLBModel({ modelUrl }: { modelUrl: string }) {
     }
     
     // Scale and center the model
-    const box = new THREE.Box3().setFromObject(cloned)
+    const box = new THREE.Box3().setFromObject(clone)
     const size = box.getSize(new THREE.Vector3())
     const maxDim = Math.max(size.x, size.y, size.z)
     const scale = 1.5 / maxDim
-    cloned.scale.setScalar(scale)
+    clone.scale.setScalar(scale)
     
     // Recalculate bounds after scaling
-    const newBox = new THREE.Box3().setFromObject(cloned)
+    const newBox = new THREE.Box3().setFromObject(clone)
     const center = newBox.getCenter(new THREE.Vector3())
-    cloned.position.y = -newBox.min.y
-    cloned.position.x = -center.x
-    cloned.position.z = -center.z
+    clone.position.y = -newBox.min.y
+    clone.position.x = -center.x
+    clone.position.z = -center.z
     
-    groupRef.current.add(cloned)
-  }, [scene])
+    groupRef.current.add(clone)
+  }, [clone])
 
   return <group ref={groupRef} />
 }
 
+// Get available animations from a model
+export function useModelAnimations(modelUrl: string): string[] {
+  const proxiedUrl = getProxiedUrl(modelUrl)
+  try {
+    const { animations } = useGLTF(proxiedUrl)
+    return animations.map(a => a.name)
+  } catch {
+    return []
+  }
+}
+
 // Player model wrapper - renders GLB or fallback
-function PlayerModel({ modelUrl, color }: { modelUrl?: string; color: string }) {
+function PlayerModel({ modelUrl, color, currentAnimation, isMoving }: { modelUrl?: string; color: string; currentAnimation?: string; isMoving?: boolean }) {
   if (!modelUrl) {
     return <CapsuleAvatar color={color} />
   }
@@ -88,7 +139,7 @@ function PlayerModel({ modelUrl, color }: { modelUrl?: string; color: string }) 
   return (
     <ErrorBoundaryModel fallback={<CapsuleAvatar color={color} />}>
       <React.Suspense fallback={<CapsuleAvatar color={color} />}>
-        <GLBModel modelUrl={modelUrl} />
+        <GLBModel modelUrl={modelUrl} currentAnimation={currentAnimation} isMoving={isMoving} />
       </React.Suspense>
     </ErrorBoundaryModel>
   )
@@ -148,8 +199,9 @@ function OtherPlayerCharacter({ player }: { player: Player }) {
 }
 
 // Local player character that we control
-function LocalPlayerCharacter({ player, positionRef, rotationRef, modelUrl }: { player: Player; positionRef: React.MutableRefObject<{x: number, z: number}>; rotationRef: React.MutableRefObject<number>; modelUrl: string }) {
+function LocalPlayerCharacter({ player, positionRef, rotationRef, modelUrl, currentAnimation, isMovingRef }: { player: Player; positionRef: React.MutableRefObject<{x: number, z: number}>; rotationRef: React.MutableRefObject<number>; modelUrl: string; currentAnimation?: string; isMovingRef: React.MutableRefObject<boolean> }) {
   const groupRef = useRef<THREE.Group>(null)
+  const [isMoving, setIsMoving] = useState(false)
 
   useFrame(() => {
     if (groupRef.current) {
@@ -157,11 +209,13 @@ function LocalPlayerCharacter({ player, positionRef, rotationRef, modelUrl }: { 
       groupRef.current.position.z = positionRef.current.z
       groupRef.current.rotation.y = rotationRef.current
     }
+    // Update movement state for animation
+    setIsMoving(isMovingRef.current)
   })
 
   return (
     <group ref={groupRef} position={[positionRef.current.x, 0, positionRef.current.z]}>
-      <PlayerModel modelUrl={modelUrl || player.model_url} color={player.color} />
+      <PlayerModel modelUrl={modelUrl || player.model_url} color={player.color} currentAnimation={currentAnimation} isMoving={isMoving} />
 
       {/* Name label */}
       <Html position={[0, 1.8, 0]} center>
@@ -174,13 +228,14 @@ function LocalPlayerCharacter({ player, positionRef, rotationRef, modelUrl }: { 
 }
 
 // Main scene
-function Scene({ players, localPlayerId, modelUrl, onPositionChange }: { players: Player[]; localPlayerId: string | null; modelUrl: string; onPositionChange: (x: number, z: number, rotation: number) => void }) {
+function Scene({ players, localPlayerId, modelUrl, onPositionChange, currentAnimation }: { players: Player[]; localPlayerId: string | null; modelUrl: string; onPositionChange: (x: number, z: number, rotation: number) => void; currentAnimation?: string }) {
   const cameraRef = useRef<THREE.PerspectiveCamera>(null)
   const localPlayer = players.find((p) => p.id === localPlayerId)
   const keysPressed = useRef<{ [key: string]: boolean }>({})
   const velocityRef = useRef({ x: 0, z: 0 })
   const positionRef = useRef({ x: localPlayer?.position_x || 0, z: localPlayer?.position_z || 0 })
   const rotationRef = useRef(localPlayer?.rotation_y || 0)
+  const isMovingRef = useRef(false)
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -225,6 +280,10 @@ function Scene({ players, localPlayerId, modelUrl, onPositionChange }: { players
 
     // Handle movement (W/S or Up/Down arrow)
     const forward = (keysPressed.current["w"] || keysPressed.current["arrowup"] ? 1 : 0) + (keysPressed.current["s"] || keysPressed.current["arrowdown"] ? -1 : 0)
+    const isRotating = keysPressed.current["a"] || keysPressed.current["arrowleft"] || keysPressed.current["d"] || keysPressed.current["arrowright"]
+
+    // Track if player is moving for animation
+    isMovingRef.current = forward !== 0 || isRotating
 
     if (forward !== 0) {
       const moveX = Math.sin(rotationRef.current) * speed * forward
@@ -267,7 +326,7 @@ function Scene({ players, localPlayerId, modelUrl, onPositionChange }: { players
       {/* Players */}
       {players.map((player) => (
         player.id === localPlayerId ? (
-          <LocalPlayerCharacter key={player.id} player={player} positionRef={positionRef} rotationRef={rotationRef} modelUrl={modelUrl} />
+          <LocalPlayerCharacter key={player.id} player={player} positionRef={positionRef} rotationRef={rotationRef} modelUrl={modelUrl} currentAnimation={currentAnimation} isMovingRef={isMovingRef} />
         ) : (
           <OtherPlayerCharacter key={player.id} player={player} />
         )
@@ -287,13 +346,14 @@ interface WorldSceneProps {
   localPlayerId: string | null
   modelUrl: string
   onPositionChange: (x: number, z: number, rotation: number) => void
+  currentAnimation?: string
 }
 
-export default function WorldScene({ players, localPlayerId, modelUrl, onPositionChange }: WorldSceneProps) {
+export default function WorldScene({ players, localPlayerId, modelUrl, onPositionChange, currentAnimation }: WorldSceneProps) {
   return (
     <div className="w-full h-screen">
       <Canvas shadows>
-        <Scene players={players} localPlayerId={localPlayerId} modelUrl={modelUrl} onPositionChange={onPositionChange} />
+        <Scene players={players} localPlayerId={localPlayerId} modelUrl={modelUrl} onPositionChange={onPositionChange} currentAnimation={currentAnimation} />
       </Canvas>
     </div>
   )
