@@ -279,17 +279,25 @@ function Scene({ players, localPlayerId, modelUrl, originalModelUrl, onPositionC
   const isMovingRef = useRef(false)
 
   useEffect(() => {
+    const isTypingTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) return false
+      const tagName = target.tagName.toLowerCase()
+      return tagName === "input" || tagName === "textarea" || target.isContentEditable
+    }
+
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target)) return
       const key = e.key.toLowerCase()
-      if (["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(key)) {
+      if (["arrowup", "arrowdown", "arrowleft", "arrowright"].includes(key)) {
         keysPressed.current[key] = true
         e.preventDefault()
       }
     }
 
     const handleKeyUp = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target)) return
       const key = e.key.toLowerCase()
-      if (["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(key)) {
+      if (["arrowup", "arrowdown", "arrowleft", "arrowright"].includes(key)) {
         keysPressed.current[key] = false
         e.preventDefault()
       }
@@ -311,17 +319,17 @@ function Scene({ players, localPlayerId, modelUrl, originalModelUrl, onPositionC
     const speed = 0.15
     const rotationSpeed = 0.05
 
-    // Handle rotation (A/D or Left/Right arrow)
-    if (keysPressed.current["a"] || keysPressed.current["arrowleft"]) {
+    // Handle rotation (Left/Right arrow)
+    if (keysPressed.current["arrowleft"]) {
       rotationRef.current += rotationSpeed
     }
-    if (keysPressed.current["d"] || keysPressed.current["arrowright"]) {
+    if (keysPressed.current["arrowright"]) {
       rotationRef.current -= rotationSpeed
     }
 
-    // Handle movement (W/S or Up/Down arrow)
-    const forward = (keysPressed.current["w"] || keysPressed.current["arrowup"] ? 1 : 0) + (keysPressed.current["s"] || keysPressed.current["arrowdown"] ? -1 : 0)
-    const isRotating = keysPressed.current["a"] || keysPressed.current["arrowleft"] || keysPressed.current["d"] || keysPressed.current["arrowright"]
+    // Handle movement (Up/Down arrow)
+    const forward = (keysPressed.current["arrowup"] ? 1 : 0) + (keysPressed.current["arrowdown"] ? -1 : 0)
+    const isRotating = keysPressed.current["arrowleft"] || keysPressed.current["arrowright"]
 
     // Track if player is moving for animation
     isMovingRef.current = forward !== 0 || isRotating
