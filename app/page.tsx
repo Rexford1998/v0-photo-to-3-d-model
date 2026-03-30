@@ -195,6 +195,17 @@ export default function Home() {
 
       setUploadedRigTaskId(riggingData.taskId)
 
+      if (user) {
+        const supabase = createClient()
+        await supabase
+          .from('players')
+          .upsert({
+            user_id: user.id,
+            rig_task_id: riggingData.taskId,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'user_id' })
+      }
+
       const riggingTask = await pollUploadedRiggingTask(riggingData.taskId)
       if (riggingTask.result?.basic_animations?.walking_glb_url) {
         setUploadedAnimationUrl(riggingTask.result.basic_animations.walking_glb_url)
@@ -481,6 +492,12 @@ export default function Home() {
                   <strong>Uploaded model loaded:</strong> Your uploaded model can be rigged, animated, and saved.
                 </div>
                 {!user && <p className="text-xs">Log in to save this uploaded model and generate animations.</p>}
+              </div>
+            )}
+
+            {uploadedModelUrl && uploadedRigTaskId && user && (
+              <div className="rounded-xl border border-green-500/30 bg-green-500/10 p-3 text-sm text-green-700 text-center">
+                Rigging saved to your player profile. Generate animations below to save them to your account.
               </div>
             )}
 
