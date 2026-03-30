@@ -4,6 +4,7 @@
 import { useState, useEffect } from "react"
 import dynamic from "next/dynamic"
 import { ImageUpload } from "@/components/image-upload"
+import { ModelUpload } from "@/components/model-upload"
 import { ProgressSteps } from "@/components/progress-steps"
 import { useMeshy } from "@/hooks/use-meshy"
 import { Button } from "@/components/ui/button"
@@ -35,6 +36,7 @@ const STEPS = [
 
 export default function Home() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [uploadedModelUrl, setUploadedModelUrl] = useState<string | null>(null)
   const [user, setUser] = useState<SupabaseUser | null>(null)
   const [savedModelUrl, setSavedModelUrl] = useState<string | null>(null)
   const [isLoadingUser, setIsLoadingUser] = useState(true)
@@ -130,11 +132,17 @@ export default function Home() {
 
   const handleReset = () => {
     setSelectedImage(null)
+    setUploadedModelUrl(null)
     reset()
   }
 
+  const handleModelUpload = (_file: File, url: string) => {
+    setUploadedModelUrl(url)
+  }
+
   const isProcessing = stage === "generating" || stage === "rigging" || stage === "uploading"
-  const showModel = stage === "complete" && modelUrl
+  const showModel = (stage === "complete" && modelUrl) || uploadedModelUrl
+  const displayModelUrl = uploadedModelUrl || modelUrl
 
   return (
     <main className="min-h-screen bg-background">
@@ -240,6 +248,14 @@ export default function Home() {
                   </Button>
                 )}
               </div>
+
+              {/* Model Upload for Testing */}
+              <div className="pt-4 border-t border-border">
+                <ModelUpload
+                  onModelSelect={handleModelUpload}
+                  disabled={isProcessing}
+                />
+              </div>
             </div>
 
             {isProcessing && (
@@ -311,10 +327,19 @@ export default function Home() {
             </div>
 
             <div className="aspect-[4/3] overflow-hidden rounded-2xl border border-border shadow-xl">
-              <ModelViewer modelUrl={modelUrl} animationUrl={animationUrl || undefined} />
+              <ModelViewer modelUrl={displayModelUrl!} animationUrl={animationUrl || undefined} />
             </div>
 
-            {animationUrl && (
+            {uploadedModelUrl && (
+              <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-blue-500/10 p-3 text-sm text-blue-600 mt-4">
+                <div className="flex items-center gap-2">
+                  <Package className="h-4 w-4" />
+                  <strong>Test Model Loaded:</strong> This is a locally uploaded model for testing.
+                </div>
+              </div>
+            )}
+
+            {animationUrl && !uploadedModelUrl && (
               <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-accent/10 p-3 text-sm text-accent mt-4">
                 <div className="flex items-center gap-2">
                   <Play className="h-4 w-4" />
@@ -323,12 +348,12 @@ export default function Home() {
               </div>
             )}
 
-            {modelUrl && (
+            {displayModelUrl && (
               <div className="flex flex-col items-center gap-4 mt-6">
                 {user ? (
                   <>
-                    <p className="text-sm text-green-600">Model saved to your account!</p>
-                    <Link href={`/world?modelUrl=${encodeURIComponent(modelUrl)}`}>
+                    {!uploadedModelUrl && <p className="text-sm text-green-600">Model saved to your account!</p>}
+                    <Link href={`/world?modelUrl=${encodeURIComponent(displayModelUrl)}`}>
                       <Button size="lg" className="h-12 px-8 text-base font-semibold bg-green-600 hover:bg-green-700">
                         <Gamepad2 className="mr-2 h-5 w-5" />
                         Join Multiplayer World
