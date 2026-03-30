@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect, useRef, useState, useMemo } from "react"
-import { Canvas, useFrame, useGraph } from "@react-three/fiber"
+import { Canvas, useFrame } from "@react-three/fiber"
 import { Html, PerspectiveCamera, useGLTF, useAnimations } from "@react-three/drei"
 import * as THREE from "three"
 import { SkeletonUtils } from "three-stdlib"
@@ -44,22 +44,48 @@ function CapsuleAvatar({ color }: { color: string }) {
 }
 
 // GLB Model loader component with animation support
-function GLBModel({ modelUrl, isMoving }: { modelUrl: string; isMoving?: boolean }) {
+function GLBModel({ animatedUrl, originalUrl, isMoving }: { animatedUrl: string; originalUrl: string; isMoving?: boolean }) {
   const groupRef = useRef<THREE.Group>(null)
-  const proxiedUrl = getProxiedUrl(modelUrl)
-  const { scene, animations } = useGLTF(proxiedUrl)
+
+  const proxiedAnimatedUrl = getProxiedUrl(animatedUrl)
+  const proxiedOriginalUrl = getProxiedUrl(originalUrl)
+
+  const { scene: animatedScene, animations } = useGLTF(proxiedAnimatedUrl)
+  const { scene: originalScene } = useGLTF(proxiedOriginalUrl)
   
   // Clone and scale the scene, memoized per scene change
   const scaledClone = useMemo(() => {
-    const cloned = SkeletonUtils.clone(scene)
+    const cloned = SkeletonUtils.clone(animatedScene)
+
+    // Apply original materials to cloned animated scene
+    if (originalScene && proxiedOriginalUrl !== proxiedAnimatedUrl) {
+      // The Meshy animation API can alter mesh hierarchies and combine meshes.
+      // Typically, models generated through v0/Meshy use a single material atlas.
+      // So we extract the first valid material from the original and apply it everywhere.
+      let originalMaterial: THREE.MeshStandardMaterial | null = null
+      originalScene.traverse((child) => {
+        if (child instanceof THREE.Mesh && child.material) {
+          originalMaterial = child.material as THREE.MeshStandardMaterial
+        }
+      })
+
+      if (originalMaterial) {
+        cloned.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            child.material = originalMaterial
+          }
+        })
+      }
+    }
     
     // Reset transforms completely
     cloned.scale.set(1, 1, 1)
     cloned.position.set(0, 0, 0)
     cloned.rotation.set(0, 0, 0)
     
-    // Calculate bounding box to get actual model dimensions
-    const box = new THREE.Box3().setFromObject(cloned)
+    // Calculate bounding box based on original scene to maintain consistent size
+    // Using original scene because animated bounds can vary drastically
+    const box = new THREE.Box3().setFromObject(originalScene || cloned)
     const size = box.getSize(new THREE.Vector3())
     
     // Use the MAXIMUM dimension to normalize all models consistently
@@ -141,31 +167,32 @@ export function useModelAnimations(modelUrl: string): string[] {
 }
 
 // Player model wrapper - renders GLB or fallback
-function PlayerModel({ modelUrl, color, isMoving }: { modelUrl?: string; color: string; isMoving?: boolean }) {
-  if (!modelUrl) {
+function PlayerModel({ animatedUrl, originalUrl, color, isMoving }: { animatedUrl?: string; originalUrl?: string; color: string; isMoving?: boolean }) {
+  if (!animatedUrl) {
     return <CapsuleAvatar color={color} />
   }
   
   return (
     <ErrorBoundaryModel fallback={<CapsuleAvatar color={color} />}>
       <React.Suspense fallback={<CapsuleAvatar color={color} />}>
-        <GLBModel modelUrl={modelUrl} isMoving={isMoving} />
+        <GLBModel animatedUrl={animatedUrl} originalUrl={originalUrl || animatedUrl} isMoving={isMoving} />
       </React.Suspense>
     </ErrorBoundaryModel>
   )
 }
 
 // Simple error boundary for model loading
-class ErrorBoundaryModel extends React.Component<{ children: React.ReactNode; fallback: React.ReactNode }, { hasError: boolean }> {
+class ErrorBoundaryModel extends React.Component<{ children: React.ReactNode; fallback: React.ReactNode }, { hasError: boolean, error: Error | null }> {
   constructor(props: { children: React.ReactNode; fallback: React.ReactNode }) {
     super(props)
-    this.state = { hasError: false }
+    this.state = { hasError: false, error: null }
   }
   
-  static getDerivedStateFromError() {
-    return { hasError: true }
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error }
   }
   
+  componentDidCatch(error: any, errorInfo: any) { console.error("Model Error:", error, errorInfo); }
   render() {
     if (this.state.hasError) {
       return this.props.fallback
@@ -196,10 +223,11 @@ function OtherPlayerCharacter({ player }: { player: Player }) {
 
   // Use animation_url if available, otherwise fall back to model_url
   const displayModelUrl = player.animation_url || player.model_url
+  const originalModelUrl = player.model_url || displayModelUrl
 
   return (
     <group ref={groupRef} position={[player.position_x, player.position_y, player.position_z]}>
-      <PlayerModel modelUrl={displayModelUrl} color={player.color} />
+      <PlayerModel animatedUrl={displayModelUrl} originalUrl={originalModelUrl} color={player.color} />
 
       {/* Name label */}
       <Html position={[0, 1.8, 0]} center>
@@ -212,7 +240,7 @@ function OtherPlayerCharacter({ player }: { player: Player }) {
 }
 
 // Local player character that we control
-function LocalPlayerCharacter({ player, positionRef, rotationRef, modelUrl, isMovingRef }: { player: Player; positionRef: React.MutableRefObject<{x: number, z: number}>; rotationRef: React.MutableRefObject<number>; modelUrl: string; isMovingRef: React.MutableRefObject<boolean> }) {
+function LocalPlayerCharacter({ player, positionRef, rotationRef, modelUrl, originalModelUrl, isMovingRef }: { player: Player; positionRef: React.MutableRefObject<{x: number, z: number}>; rotationRef: React.MutableRefObject<number>; modelUrl: string; originalModelUrl: string; isMovingRef: React.MutableRefObject<boolean> }) {
   const groupRef = useRef<THREE.Group>(null)
   const [isMoving, setIsMoving] = useState(false)
 
@@ -228,7 +256,7 @@ function LocalPlayerCharacter({ player, positionRef, rotationRef, modelUrl, isMo
 
   return (
     <group ref={groupRef} position={[positionRef.current.x, 0, positionRef.current.z]}>
-      <PlayerModel modelUrl={modelUrl || player.model_url} color={player.color} isMoving={isMoving} />
+      <PlayerModel animatedUrl={modelUrl || player.model_url} originalUrl={originalModelUrl || player.model_url} color={player.color} isMoving={isMoving} />
 
       {/* Name label */}
       <Html position={[0, 1.8, 0]} center>
@@ -241,7 +269,7 @@ function LocalPlayerCharacter({ player, positionRef, rotationRef, modelUrl, isMo
 }
 
 // Main scene
-function Scene({ players, localPlayerId, modelUrl, onPositionChange }: { players: Player[]; localPlayerId: string | null; modelUrl: string; onPositionChange: (x: number, z: number, rotation: number) => void }) {
+function Scene({ players, localPlayerId, modelUrl, originalModelUrl, onPositionChange }: { players: Player[]; localPlayerId: string | null; modelUrl: string; originalModelUrl: string; onPositionChange: (x: number, z: number, rotation: number) => void }) {
   const cameraRef = useRef<THREE.PerspectiveCamera>(null)
   const localPlayer = players.find((p) => p.id === localPlayerId)
   const keysPressed = useRef<{ [key: string]: boolean }>({})
@@ -339,7 +367,7 @@ function Scene({ players, localPlayerId, modelUrl, onPositionChange }: { players
       {/* Players */}
       {players.map((player) => (
         player.id === localPlayerId ? (
-          <LocalPlayerCharacter key={player.id} player={player} positionRef={positionRef} rotationRef={rotationRef} modelUrl={modelUrl} isMovingRef={isMovingRef} />
+          <LocalPlayerCharacter key={player.id} player={player} positionRef={positionRef} rotationRef={rotationRef} modelUrl={modelUrl} originalModelUrl={originalModelUrl} isMovingRef={isMovingRef} />
         ) : (
           <OtherPlayerCharacter key={player.id} player={player} />
         )
@@ -358,14 +386,15 @@ interface WorldSceneProps {
   players: Player[]
   localPlayerId: string | null
   modelUrl: string
+  originalModelUrl: string
   onPositionChange: (x: number, z: number, rotation: number) => void
 }
 
-export default function WorldScene({ players, localPlayerId, modelUrl, onPositionChange }: WorldSceneProps) {
+export default function WorldScene({ players, localPlayerId, modelUrl, originalModelUrl, onPositionChange }: WorldSceneProps) {
   return (
     <div className="w-full h-screen">
       <Canvas shadows>
-        <Scene players={players} localPlayerId={localPlayerId} modelUrl={modelUrl} onPositionChange={onPositionChange} />
+        <Scene players={players} localPlayerId={localPlayerId} modelUrl={modelUrl} originalModelUrl={originalModelUrl} onPositionChange={onPositionChange} />
       </Canvas>
     </div>
   )
