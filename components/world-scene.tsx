@@ -59,20 +59,23 @@ function GLBModel({ animatedUrl, originalUrl, isMoving }: { animatedUrl: string;
 
     // Apply original materials to cloned animated scene
     if (originalScene && proxiedOriginalUrl !== proxiedAnimatedUrl) {
-      // Create a map of mesh name to material from the original scene
-      const originalMaterials: Record<string, THREE.Material | THREE.Material[]> = {}
+      // The Meshy animation API can alter mesh hierarchies and combine meshes.
+      // Typically, models generated through v0/Meshy use a single material atlas.
+      // So we extract the first valid material from the original and apply it everywhere.
+      let originalMaterial: THREE.MeshStandardMaterial | null = null
       originalScene.traverse((child) => {
         if (child instanceof THREE.Mesh && child.material) {
-          originalMaterials[child.name] = child.material
+          originalMaterial = child.material as THREE.MeshStandardMaterial
         }
       })
 
-      // Apply to cloned animated scene by matching mesh names
-      cloned.traverse((child) => {
-        if (child instanceof THREE.Mesh && originalMaterials[child.name]) {
-          child.material = originalMaterials[child.name]
-        }
-      })
+      if (originalMaterial) {
+        cloned.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            child.material = originalMaterial
+          }
+        })
+      }
     }
     
     // Reset transforms completely
@@ -179,16 +182,17 @@ function PlayerModel({ animatedUrl, originalUrl, color, isMoving }: { animatedUr
 }
 
 // Simple error boundary for model loading
-class ErrorBoundaryModel extends React.Component<{ children: React.ReactNode; fallback: React.ReactNode }, { hasError: boolean }> {
+class ErrorBoundaryModel extends React.Component<{ children: React.ReactNode; fallback: React.ReactNode }, { hasError: boolean, error: Error | null }> {
   constructor(props: { children: React.ReactNode; fallback: React.ReactNode }) {
     super(props)
-    this.state = { hasError: false }
+    this.state = { hasError: false, error: null }
   }
   
-  static getDerivedStateFromError() {
-    return { hasError: true }
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error }
   }
   
+  componentDidCatch(error: any, errorInfo: any) { console.error("Model Error:", error, errorInfo); }
   render() {
     if (this.state.hasError) {
       return this.props.fallback
