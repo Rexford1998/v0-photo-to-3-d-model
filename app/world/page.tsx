@@ -80,6 +80,8 @@ function WorldPageContent() {
   const [animationPanelOpen, setAnimationPanelOpen] = useState(false)
   const [rigTaskId, setRigTaskId] = useState<string | null>(null)
   const [activeAnimationUrl, setActiveAnimationUrl] = useState<string | null>(null)
+  const [isRigging, setIsRigging] = useState(false)
+  const [riggingProgress, setRiggingProgress] = useState(0)
 
   // Load rig task ID from user's player data
   useEffect(() => {
@@ -192,6 +194,75 @@ function WorldPageContent() {
   const handleLeaveWorld = async () => {
     await leaveWorld()
     router.push("/")
+  }
+
+  // Rig the existing model to enable animations
+  const rigExistingModel = async () => {
+    if (!modelUrl) return
+
+    setIsRigging(true)
+    setRiggingProgress(0)
+
+    try {
+      // Extract the original model URL from the proxy URL
+      let originalModelUrl = modelUrl
+      if (modelUrl.includes('/api/proxy-model?url=')) {
+        const urlParam = new URL(modelUrl, window.location.origin).searchParams.get('url')
+        if (urlParam) originalModelUrl = urlParam
+      }
+
+      // Start rigging
+      const rigResponse = await fetch('/api/meshy/rigging', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ modelUrl: originalModelUrl }),
+      })
+
+      if (!rigResponse.ok) {
+        const error = await rigResponse.json()
+        throw new Error(error.error || 'Failed to start rigging')
+      }
+
+      const { taskId } = await rigResponse.json()
+
+      // Poll for completion
+      const pollInterval = setInterval(async () => {
+        try {
+          const statusResponse = await fetch(`/api/meshy/rigging/${taskId}`)
+          const status = await statusResponse.json()
+
+          setRiggingProgress(status.progress || 0)
+
+          if (status.status === 'SUCCEEDED') {
+            clearInterval(pollInterval)
+            setIsRigging(false)
+            setRigTaskId(taskId)
+
+            // Save the rig task ID to the database
+            const supabase = createClient()
+            const { data: { user } } = await supabase.auth.getUser()
+            if (user) {
+              await supabase
+                .from('players')
+                .update({ rig_task_id: taskId })
+                .eq('user_id', user.id)
+            }
+
+            alert('Model rigged successfully! You can now create animations.')
+          } else if (status.status === 'FAILED') {
+            clearInterval(pollInterval)
+            setIsRigging(false)
+            alert(`Rigging failed: ${status.error || 'Unknown error'}`)
+          }
+        } catch (err) {
+          console.error('Rigging poll error:', err)
+        }
+      }, 2000)
+    } catch (error) {
+      console.error('Rigging error:', error)
+      setIsRigging(false)
+      alert(error instanceof Error ? error.message : 'Failed to rig model')
+    }
   }
 
   // Generate animation from Meshy
@@ -398,6 +469,34 @@ function WorldPageContent() {
           
           {animationPanelOpen && (
             <div className="px-4 pb-4 space-y-3 max-h-60 overflow-y-auto">
+              {/* Rig Model Section - show if no rig task ID */}
+              {!rigTaskId && (
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg space-y-2">
+                  <p className="text-sm font-medium text-amber-600">Model Not Rigged</p>
+                  <p className="text-xs text-muted-foreground">
+                    Your model needs to be rigged before you can create animations.
+                  </p>
+                  {isRigging ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Rigging model...
+                      </div>
+                      <Progress value={riggingProgress} className="h-2" />
+                    </div>
+                  ) : (
+                    <Button 
+                      size="sm" 
+                      onClick={rigExistingModel}
+                      className="w-full"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Rig Model for Animations
+                    </Button>
+                  )}
+                </div>
+              )}
+
               {/* Generated animations */}
               {generatedAnimations.length > 0 && (
                 <div className="space-y-2">
@@ -419,9 +518,11 @@ function WorldPageContent() {
                 </div>
               )}
               
-              {/* Animation library */}
-              <p className="text-xs text-muted-foreground font-medium">Animation Library</p>
-              {isGeneratingAnimation && (
+              {/* Animation library - only show if rigged */}
+              {rigTaskId && (
+                <>
+                  <p className="text-xs text-muted-foreground font-medium">Animation Library</p>
+                  {isGeneratingAnimation && (
                 <div className="p-3 bg-secondary rounded-lg space-y-2">
                   <div className="flex items-center gap-2 text-sm">
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -459,6 +560,8 @@ function WorldPageContent() {
                   )
                 })}
               </div>
+                </>
+              )}
             </div>
           )}
         </div>
