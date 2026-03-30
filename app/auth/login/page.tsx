@@ -26,23 +26,43 @@ function LoginForm() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
+    console.log("[v0] Login form submitted")
+    console.log("[v0] Email:", email)
+    console.log("[v0] returnTo param:", returnTo)
+    
     const supabase = createClient()
     setIsLoading(true)
     setError(null)
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      console.log("[v0] Calling supabase.auth.signInWithPassword...")
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
+      
+      console.log("[v0] Auth response - error:", error)
+      console.log("[v0] Auth response - session:", data?.session ? "exists" : "null")
+      console.log("[v0] Auth response - user:", data?.user?.email || "null")
+      
       if (error) throw error
       
-      // Use window.location for a full page navigation to ensure auth cookies are set
       // Decode the returnTo URL in case it was double-encoded
-      const decodedReturnTo = decodeURIComponent(returnTo)
-      console.log("[v0] Login successful, redirecting to:", decodedReturnTo)
+      let decodedReturnTo = returnTo
+      try {
+        decodedReturnTo = decodeURIComponent(returnTo)
+      } catch {
+        console.log("[v0] Could not decode returnTo, using as-is")
+      }
+      
+      console.log("[v0] Login successful!")
+      console.log("[v0] Decoded returnTo:", decodedReturnTo)
+      console.log("[v0] Redirecting now...")
+      
+      // Use window.location for a full page navigation to ensure auth cookies are set
       window.location.href = decodedReturnTo
     } catch (error: unknown) {
+      console.log("[v0] Login error:", error)
       setError(error instanceof Error ? error.message : 'An error occurred')
     } finally {
       setIsLoading(false)

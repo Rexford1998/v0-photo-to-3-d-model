@@ -50,20 +50,27 @@ export async function updateSession(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser()
 
+    console.log("[v0 Middleware] Path:", request.nextUrl.pathname)
+    console.log("[v0 Middleware] User:", user?.email || "not authenticated")
+
     if (
       // Protect /world route - require authentication
       request.nextUrl.pathname.startsWith('/world') &&
       !user
     ) {
       // no user, redirect to the login page with return URL
+      console.log("[v0 Middleware] No user, redirecting to login")
       const url = request.nextUrl.clone()
       url.pathname = '/auth/login'
       url.searchParams.set('returnTo', request.nextUrl.pathname + request.nextUrl.search)
       return NextResponse.redirect(url)
     }
-  } catch {
+    
+    console.log("[v0 Middleware] Allowing request through")
+  } catch (err) {
     // If there's an error with auth, just continue without protecting
     // This prevents the middleware from breaking the entire app
+    console.log("[v0 Middleware] Error:", err)
   }
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is.

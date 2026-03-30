@@ -70,7 +70,9 @@ function HomeContent() {
     const supabase = createClient()
     
     const checkUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
+      console.log("[v0] Checking user auth state...")
+      const { data: { user }, error } = await supabase.auth.getUser()
+      console.log("[v0] getUser result - user:", user?.email || "null", "error:", error?.message || "none")
       setUser(user)
       
       if (user) {
@@ -91,6 +93,7 @@ function HomeContent() {
     
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("[v0] Auth state changed - event:", event, "user:", session?.user?.email || "null")
       setUser(session?.user || null)
       if (session?.user) {
         const { data } = await supabase
