@@ -267,6 +267,19 @@ export default function Home() {
       }
 
       const { data: publicData } = supabase.storage.from(uploadedBucket).getPublicUrl(filePath)
+      const { error: uploadStorageError } = await supabase
+        .storage
+        .from("models")
+        .upload(filePath, file, {
+          upsert: false,
+          contentType: file.type || "model/gltf-binary",
+        })
+
+      if (uploadStorageError) {
+        throw new Error(`Failed to upload model: ${uploadStorageError.message}`)
+      }
+
+      const { data: publicData } = supabase.storage.from("models").getPublicUrl(filePath)
       const publicUrl = publicData.publicUrl
       setUploadedModelUrl(publicUrl)
 
@@ -511,6 +524,24 @@ export default function Home() {
                   <strong>Uploaded model loaded:</strong> Your uploaded model can be rigged, animated, and saved.
                 </div>
                 {!user && <p className="text-xs">Log in to save this uploaded model and generate animations.</p>}
+              </div>
+            )}
+
+            {uploadedModelUrl && uploadedRigTaskId && user && (
+              <div className="rounded-xl border border-green-500/30 bg-green-500/10 p-3 text-sm text-green-700 text-center">
+                Rigging saved to your player profile. Generate animations below to save them to your account.
+              </div>
+            )}
+
+              </div>
+            )}
+
+            {uploadedModelUrl && uploadedRigTaskId && user && (
+              <div className="rounded-xl border border-green-500/30 bg-green-500/10 p-3 text-sm text-green-700 text-center">
+                Rigging saved to your player profile. Generate animations below to save them to your account.
+              </div>
+            )}
+
               </div>
             )}
 
