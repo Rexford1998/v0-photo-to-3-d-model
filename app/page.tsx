@@ -267,6 +267,123 @@ export default function Home() {
       }
 
       const { data: publicData } = supabase.storage.from(uploadedBucket).getPublicUrl(filePath)
+      const publicUrl = publicData.publicUrl
+      setUploadedModelUrl(publicUrl)
+
+      await supabase
+        .from('players')
+        .upsert({
+          user_id: user.id,
+          model_url: publicUrl,
+          nickname: user.email?.split('@')[0] || 'Player',
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id' })
+
+      setSavedModelUrl(publicUrl)
+
+      await startRiggingForUploadedModel(publicUrl)
+    } catch (uploadErr) {
+      console.error("[v0] Model upload failed:", uploadErr)
+      setUploadError(uploadErr instanceof Error ? uploadErr.message : "Failed to upload model")
+    } finally {
+      setIsUploadingModel(false)
+    }
+  }
+
+  }
+
+  const startRiggingForUploadedModel = async (url: string) => {
+    try {
+      const riggingResponse = await fetch("/api/meshy/rigging", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ modelUrl: url }),
+      })
+
+      if (!riggingResponse.ok) {
+        const errorData = await riggingResponse.json().catch(() => null)
+        throw new Error(errorData?.error || "Failed to start rigging")
+      }
+
+      const riggingData = await riggingResponse.json()
+      if (!riggingData.taskId) {
+        throw new Error("Rigging did not return a task ID")
+      }
+
+      setUploadedRigTaskId(riggingData.taskId)
+
+      if (user) {
+        const supabase = createClient()
+        await supabase
+          .from('players')
+          .upsert({
+            user_id: user.id,
+            rig_task_id: riggingData.taskId,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'user_id' })
+      }
+
+      const riggingTask = await pollUploadedRiggingTask(riggingData.taskId)
+      if (riggingTask.result?.basic_animations?.walking_glb_url) {
+        setUploadedAnimationUrl(riggingTask.result.basic_animations.walking_glb_url)
+      } else if (riggingTask.result?.rigged_character_glb_url) {
+        setUploadedAnimationUrl(riggingTask.result.rigged_character_glb_url)
+      }
+    } catch (riggingError) {
+      console.warn("[v0] Uploaded model rigging failed:", riggingError)
+      setUploadError(riggingError instanceof Error ? riggingError.message : "Rigging failed for uploaded model")
+    }
+  }
+
+  const handleModelUpload = async (file: File, localUrl: string) => {
+    setUploadedModelUrl(localUrl)
+    setUploadedRigTaskId(null)
+    setUploadedAnimationUrl(null)
+    setUploadError(null)
+
+    if (!user) {
+      return
+    }
+
+    setIsUploadingModel(true)
+
+    try {
+      const supabase = createClient()
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_")
+      const filePath = `${user.id}/${Date.now()}-${safeName}`
+
+      const candidateBuckets = ["models", "model_uploads", "uploads"]
+      let uploadedBucket: string | null = null
+      let lastUploadError: string | null = null
+
+      for (const bucket of candidateBuckets) {
+        const { error: uploadStorageError } = await supabase
+          .storage
+          .from(bucket)
+          .upload(filePath, file, {
+            upsert: false,
+            contentType: file.type || "model/gltf-binary",
+          })
+
+        if (!uploadStorageError) {
+          uploadedBucket = bucket
+          break
+        }
+
+        lastUploadError = uploadStorageError.message
+        const bucketMissing = uploadStorageError.message.toLowerCase().includes("bucket not found")
+        if (!bucketMissing) {
+          throw new Error(`Failed to upload model: ${uploadStorageError.message}`)
+        }
+      }
+
+      if (!uploadedBucket) {
+        throw new Error(
+          `Failed to upload model: ${lastUploadError || "No compatible storage bucket found"}. Create a public bucket named \"models\" (or \"model_uploads\").`
+        )
+      }
+
+      const { data: publicData } = supabase.storage.from(uploadedBucket).getPublicUrl(filePath)
       const { error: uploadStorageError } = await supabase
         .storage
         .from("models")
@@ -308,6 +425,49 @@ export default function Home() {
   const displayModelUrl = uploadedModelUrl || modelUrl
   const displayAnimationUrl = uploadedModelUrl ? uploadedAnimationUrl : animationUrl
   const displayRigTaskId = uploadedModelUrl ? uploadedRigTaskId : rigTaskId
+
+  const renderMultiplayerCta = () => {
+    if (!displayModelUrl) return null
+
+    if (user) {
+      return (
+        <div className="flex flex-col items-center gap-4 mt-6">
+          {!isUploadingModel && <p className="text-sm text-green-600">Model saved to your account!</p>}
+          <Link href={`/world?modelUrl=${encodeURIComponent(displayModelUrl)}`}>
+            <Button size="lg" className="h-12 px-8 text-base font-semibold bg-green-600 hover:bg-green-700">
+              <Gamepad2 className="mr-2 h-5 w-5" />
+              Join Multiplayer World
+            </Button>
+          </Link>
+        </div>
+      )
+    }
+
+    return (
+      <div className="flex flex-col items-center gap-4 mt-6">
+        <div className="rounded-xl border border-border bg-card p-6 text-center max-w-md">
+          <h3 className="font-semibold text-foreground mb-2">Save & Play Multiplayer</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            Sign up to save your character and join the multiplayer world with other players.
+          </p>
+          <div className="flex gap-3 justify-center">
+            <Link href="/auth/login">
+              <Button variant="outline">
+                <LogIn className="mr-2 h-4 w-4" />
+                Log In
+              </Button>
+            </Link>
+            <Link href="/auth/sign-up">
+              <Button>
+                <UserPlus className="mr-2 h-4 w-4" />
+                Sign Up
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <main className="min-h-screen bg-background">
@@ -564,6 +724,14 @@ export default function Home() {
               <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700">
                 {uploadError}
               </div>
+            )}
+
+            {/* Animation Generation Section - shown after model is ready */}
+            {displayModelUrl && displayRigTaskId && user && (
+              <AnimationGenerator rigTaskId={displayRigTaskId} userId={user.id} />
+            )}
+
+            {renderMultiplayerCta()}
             )}
 
             {/* Animation Generation Section - shown after model is ready */}
