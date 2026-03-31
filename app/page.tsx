@@ -117,6 +117,7 @@ export default function Home() {
         const payload = {
           user_id: user.id,
           model_url: getSavableModelUrl(modelUrl),
+          model_url: modelUrl,
           rig_task_id: rigTaskId,
           nickname: user.email?.split("@")[0] || "Player",
           updated_at: new Date().toISOString(),
@@ -159,6 +160,7 @@ export default function Home() {
         }
 
         setSavedModelUrl(payload.model_url)
+        setSavedModelUrl(modelUrl)
       }
     }
     
@@ -341,6 +343,39 @@ export default function Home() {
         model_url: savablePublicUrl,
         nickname: user.email?.split("@")[0] || "Player",
         updated_at: new Date().toISOString(),
+      }
+        model_url: publicUrl,
+        nickname: user.email?.split("@")[0] || "Player",
+        updated_at: new Date().toISOString(),
+      }
+
+      const { data: existingPlayer, error: existingPlayerError } = await supabase
+        .from("players")
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle()
+
+      if (existingPlayerError) {
+        throw new Error(`Could not verify saved character: ${existingPlayerError.message}`)
+      }
+
+      if (existingPlayer) {
+        const { error: updateError } = await supabase
+          .from("players")
+          .update(payload)
+          .eq("user_id", user.id)
+
+        if (updateError) {
+          throw new Error(`Failed to update saved character: ${updateError.message}`)
+        }
+      } else {
+        const { error: insertError } = await supabase
+          .from("players")
+          .insert(payload)
+
+        if (insertError) {
+          throw new Error(`Failed to save character: ${insertError.message}`)
+        }
       }
 
       const { data: existingPlayer, error: existingPlayerError } = await supabase
