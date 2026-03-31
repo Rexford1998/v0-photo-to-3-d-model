@@ -100,18 +100,6 @@ function WorldPageContent() {
     }
 
     loadCountries()
-  const countryOptions = useMemo(() => {
-    const supportedValuesOf = (Intl as any).supportedValuesOf as ((type: string) => string[]) | undefined
-    if (!supportedValuesOf) return ["United States"]
-
-    const displayNames = new Intl.DisplayNames(["en"], { type: "region" })
-    const countries = supportedValuesOf("region")
-      .filter((code) => /^[A-Z]{2}$/.test(code))
-      .map((code) => displayNames.of(code))
-      .filter((name): name is string => Boolean(name) && name.length > 2)
-      .sort((a, b) => a.localeCompare(b))
-
-    return countries.length > 0 ? countries : ["United States"]
   }, [])
 
   // Load saved animations from user's player data
