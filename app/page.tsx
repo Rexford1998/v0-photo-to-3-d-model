@@ -290,6 +290,136 @@ export default function Home() {
     }
   }
 
+  }
+
+  const startRiggingForUploadedModel = async (url: string) => {
+    try {
+      const riggingResponse = await fetch("/api/meshy/rigging", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ modelUrl: url }),
+      })
+
+      if (!riggingResponse.ok) {
+        const errorData = await riggingResponse.json().catch(() => null)
+        throw new Error(errorData?.error || "Failed to start rigging")
+      }
+
+      const riggingData = await riggingResponse.json()
+      if (!riggingData.taskId) {
+        throw new Error("Rigging did not return a task ID")
+      }
+
+      setUploadedRigTaskId(riggingData.taskId)
+
+      if (user) {
+        const supabase = createClient()
+        await supabase
+          .from('players')
+          .upsert({
+            user_id: user.id,
+            rig_task_id: riggingData.taskId,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'user_id' })
+      }
+
+      const riggingTask = await pollUploadedRiggingTask(riggingData.taskId)
+      if (riggingTask.result?.basic_animations?.walking_glb_url) {
+        setUploadedAnimationUrl(riggingTask.result.basic_animations.walking_glb_url)
+      } else if (riggingTask.result?.rigged_character_glb_url) {
+        setUploadedAnimationUrl(riggingTask.result.rigged_character_glb_url)
+      }
+    } catch (riggingError) {
+      console.warn("[v0] Uploaded model rigging failed:", riggingError)
+      setUploadError(riggingError instanceof Error ? riggingError.message : "Rigging failed for uploaded model")
+    }
+  }
+
+  const handleModelUpload = async (file: File, localUrl: string) => {
+    setUploadedModelUrl(localUrl)
+    setUploadedRigTaskId(null)
+    setUploadedAnimationUrl(null)
+    setUploadError(null)
+
+    if (!user) {
+      return
+    }
+
+    setIsUploadingModel(true)
+
+    try {
+      const supabase = createClient()
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_")
+      const filePath = `${user.id}/${Date.now()}-${safeName}`
+
+      const candidateBuckets = ["models", "model_uploads", "uploads"]
+      let uploadedBucket: string | null = null
+      let lastUploadError: string | null = null
+
+      for (const bucket of candidateBuckets) {
+        const { error: uploadStorageError } = await supabase
+          .storage
+          .from(bucket)
+          .upload(filePath, file, {
+            upsert: false,
+            contentType: file.type || "model/gltf-binary",
+          })
+
+        if (!uploadStorageError) {
+          uploadedBucket = bucket
+          break
+        }
+
+        lastUploadError = uploadStorageError.message
+        const bucketMissing = uploadStorageError.message.toLowerCase().includes("bucket not found")
+        if (!bucketMissing) {
+          throw new Error(`Failed to upload model: ${uploadStorageError.message}`)
+        }
+      }
+
+      if (!uploadedBucket) {
+        throw new Error(
+          `Failed to upload model: ${lastUploadError || "No compatible storage bucket found"}. Create a public bucket named \"models\" (or \"model_uploads\").`
+        )
+      }
+
+      const { data: publicData } = supabase.storage.from(uploadedBucket).getPublicUrl(filePath)
+      const { error: uploadStorageError } = await supabase
+        .storage
+        .from("models")
+        .upload(filePath, file, {
+          upsert: false,
+          contentType: file.type || "model/gltf-binary",
+        })
+
+      if (uploadStorageError) {
+        throw new Error(`Failed to upload model: ${uploadStorageError.message}`)
+      }
+
+      const { data: publicData } = supabase.storage.from("models").getPublicUrl(filePath)
+      const publicUrl = publicData.publicUrl
+      setUploadedModelUrl(publicUrl)
+
+      await supabase
+        .from('players')
+        .upsert({
+          user_id: user.id,
+          model_url: publicUrl,
+          nickname: user.email?.split('@')[0] || 'Player',
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id' })
+
+      setSavedModelUrl(publicUrl)
+
+      await startRiggingForUploadedModel(publicUrl)
+    } catch (uploadErr) {
+      console.error("[v0] Model upload failed:", uploadErr)
+      setUploadError(uploadErr instanceof Error ? uploadErr.message : "Failed to upload model")
+    } finally {
+      setIsUploadingModel(false)
+    }
+  }
+
   const isProcessing = stage === "generating" || stage === "rigging" || stage === "uploading" || isUploadingModel
   const showModel = (stage === "complete" && modelUrl) || uploadedModelUrl
   const displayModelUrl = uploadedModelUrl || modelUrl
@@ -563,6 +693,24 @@ export default function Home() {
               </div>
             )}
 
+              </div>
+            )}
+
+            {uploadedModelUrl && uploadedRigTaskId && user && (
+              <div className="rounded-xl border border-green-500/30 bg-green-500/10 p-3 text-sm text-green-700 text-center">
+                Rigging saved to your player profile. Generate animations below to save them to your account.
+              </div>
+            )}
+
+              </div>
+            )}
+
+            {uploadedModelUrl && uploadedRigTaskId && user && (
+              <div className="rounded-xl border border-green-500/30 bg-green-500/10 p-3 text-sm text-green-700 text-center">
+                Rigging saved to your player profile. Generate animations below to save them to your account.
+              </div>
+            )}
+
             {displayAnimationUrl && (
               <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-accent/10 p-3 text-sm text-accent mt-4">
                 <div className="flex items-center gap-2">
@@ -584,6 +732,49 @@ export default function Home() {
             )}
 
             {renderMultiplayerCta()}
+            )}
+
+            {/* Animation Generation Section - shown after model is ready */}
+            {displayModelUrl && displayRigTaskId && user && (
+              <AnimationGenerator rigTaskId={displayRigTaskId} userId={user.id} />
+            )}
+
+            {displayModelUrl ? (
+              <div className="flex flex-col items-center gap-4 mt-6">
+                {user ? (
+                  <>
+                    {!isUploadingModel && <p className="text-sm text-green-600">Model saved to your account!</p>}
+                    <Link href={`/world?modelUrl=${encodeURIComponent(displayModelUrl)}`}>
+                      <Button size="lg" className="h-12 px-8 text-base font-semibold bg-green-600 hover:bg-green-700">
+                        <Gamepad2 className="mr-2 h-5 w-5" />
+                        Join Multiplayer World
+                      </Button>
+                    </Link>
+                  </>
+                ) : (
+                  <div className="rounded-xl border border-border bg-card p-6 text-center max-w-md">
+                    <h3 className="font-semibold text-foreground mb-2">Save & Play Multiplayer</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Sign up to save your character and join the multiplayer world with other players.
+                    </p>
+                    <div className="flex gap-3 justify-center">
+                      <Link href="/auth/login">
+                        <Button variant="outline">
+                          <LogIn className="mr-2 h-4 w-4" />
+                          Log In
+                        </Button>
+                      </Link>
+                      <Link href="/auth/sign-up">
+                        <Button>
+                          <UserPlus className="mr-2 h-4 w-4" />
+                          Sign Up
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : null}
           </div>
         )}
       </div>

@@ -2,7 +2,7 @@
 
 // Multiplayer world - 3D environment with player sync and chat
 import { useSearchParams, useRouter } from "next/navigation"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
 import { ArrowLeft, Send, Users, LogOut, Play, ChevronDown, ChevronUp, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -100,6 +100,18 @@ function WorldPageContent() {
     }
 
     loadCountries()
+  const countryOptions = useMemo(() => {
+    const supportedValuesOf = (Intl as any).supportedValuesOf as ((type: string) => string[]) | undefined
+    if (!supportedValuesOf) return ["United States"]
+
+    const displayNames = new Intl.DisplayNames(["en"], { type: "region" })
+    const countries = supportedValuesOf("region")
+      .filter((code) => /^[A-Z]{2}$/.test(code))
+      .map((code) => displayNames.of(code))
+      .filter((name): name is string => Boolean(name) && name.length > 2)
+      .sort((a, b) => a.localeCompare(b))
+
+    return countries.length > 0 ? countries : ["United States"]
   }, [])
 
   // Load saved animations from user's player data
@@ -353,6 +365,7 @@ function WorldPageContent() {
           <p className="text-xs text-muted-foreground">
             Use Arrow Keys to move{joinedCountry ? ` • Location: ${joinedCountry}` : ""}
           </p>
+          <p className="text-xs text-muted-foreground">Use Arrow Keys to move</p>
           
           {/* Animation Selector */}
           {availableAnimations.length > 0 && (
