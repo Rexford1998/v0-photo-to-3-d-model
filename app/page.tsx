@@ -542,6 +542,15 @@ export default function Home() {
               </div>
             )}
 
+              </div>
+            )}
+
+            {uploadedModelUrl && uploadedRigTaskId && user && (
+              <div className="rounded-xl border border-green-500/30 bg-green-500/10 p-3 text-sm text-green-700 text-center">
+                Rigging saved to your player profile. Generate animations below to save them to your account.
+              </div>
+            )}
+
             {displayAnimationUrl && (
               <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-accent/10 p-3 text-sm text-accent mt-4">
                 <div className="flex items-center gap-2">
@@ -562,7 +571,7 @@ export default function Home() {
               <AnimationGenerator rigTaskId={displayRigTaskId} userId={user.id} />
             )}
 
-            {displayModelUrl && (
+            {displayModelUrl ? (
               <div className="flex flex-col items-center gap-4 mt-6">
                 {user ? (
                   <>
@@ -597,7 +606,7 @@ export default function Home() {
                   </div>
                 )}
               </div>
-            )}
+            ) : null}
           </div>
         )}
       </div>
