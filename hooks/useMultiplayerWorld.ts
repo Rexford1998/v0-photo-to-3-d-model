@@ -100,12 +100,12 @@ export function useMultiplayerWorld(modelUrl: string = "") {
           return false
         }
 
-        // Check if user already has a player record
+        // Check if player with this nickname already exists
         const { data: existingPlayer } = await supabase
           .from("players")
           .select("*")
-          .eq("user_id", user.id)
-          .single()
+          .eq("nickname", nickname)
+          .maybeSingle()
 
         let playerData
         
@@ -123,7 +123,7 @@ export function useMultiplayerWorld(modelUrl: string = "") {
               color,
               updated_at: new Date().toISOString()
             })
-            .eq("user_id", user.id)
+            .eq("id", existingPlayer.id)
             .select()
             .single()
           
@@ -139,7 +139,6 @@ export function useMultiplayerWorld(modelUrl: string = "") {
             .from("players")
             .insert([
               {
-                user_id: user.id,
                 nickname,
                 model_url: modelUrl || null,
                 position_x: Math.random() * 20 - 10,
