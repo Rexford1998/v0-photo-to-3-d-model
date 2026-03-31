@@ -36,6 +36,15 @@ const STEPS = [
   { id: "complete", label: "Ready", description: "View your model" },
 ]
 
+function getSavableModelUrl(url: string): string | null {
+  if (!url || url.startsWith("blob:")) return null
+  if (url.startsWith("/api/proxy-model?url=")) return url
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    return `/api/proxy-model?url=${encodeURIComponent(url)}`
+  }
+  return url
+}
+
 export default function Home() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [uploadedModelUrl, setUploadedModelUrl] = useState<string | null>(null)
@@ -107,10 +116,15 @@ export default function Home() {
 
         const payload = {
           user_id: user.id,
+          model_url: getSavableModelUrl(modelUrl),
           model_url: modelUrl,
           rig_task_id: rigTaskId,
           nickname: user.email?.split("@")[0] || "Player",
           updated_at: new Date().toISOString(),
+        }
+        if (!payload.model_url) {
+          setSaveError("Failed to save character: model URL is temporary. Please regenerate or re-upload the model.")
+          return
         }
 
         const { data: existingPlayer, error: existingPlayerError } = await supabase
@@ -145,6 +159,7 @@ export default function Home() {
           }
         }
 
+        setSavedModelUrl(payload.model_url)
         setSavedModelUrl(modelUrl)
       }
     }
@@ -176,6 +191,7 @@ export default function Home() {
     setUploadedRigTaskId(null)
     setUploadedAnimationUrl(null)
     setUploadError(null)
+    setSaveError(null)
     setShowRigGuideEditor(false)
     setRigGuidePoints({})
     reset()
@@ -228,13 +244,29 @@ export default function Home() {
 
       if (user) {
         const supabase = createClient()
-        await supabase
-          .from('players')
-          .upsert({
-            user_id: user.id,
-            rig_task_id: riggingData.taskId,
-            updated_at: new Date().toISOString(),
-          }, { onConflict: 'user_id' })
+        const { data: existingPlayer, error: existingPlayerError } = await supabase
+          .from("players")
+          .select("id")
+          .eq("user_id", user.id)
+          .maybeSingle()
+
+        if (existingPlayerError) {
+          throw new Error(`Could not verify saved character for rigging: ${existingPlayerError.message}`)
+        }
+
+        if (existingPlayer) {
+          const { error: updateError } = await supabase
+            .from("players")
+            .update({
+              rig_task_id: riggingData.taskId,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("user_id", user.id)
+
+          if (updateError) {
+            throw new Error(`Failed to save rigging task: ${updateError.message}`)
+          }
+        }
       }
 
       const riggingTask = await pollUploadedRiggingTask(riggingData.taskId)
@@ -300,10 +332,18 @@ export default function Home() {
 
       const { data: publicData } = supabase.storage.from(uploadedBucket).getPublicUrl(filePath)
       const publicUrl = publicData.publicUrl
-      setUploadedModelUrl(publicUrl)
+      const savablePublicUrl = getSavableModelUrl(publicUrl)
+      if (!savablePublicUrl) {
+        throw new Error("Failed to prepare uploaded model URL for saving.")
+      }
+      setUploadedModelUrl(savablePublicUrl)
 
       const payload = {
         user_id: user.id,
+        model_url: savablePublicUrl,
+        nickname: user.email?.split("@")[0] || "Player",
+        updated_at: new Date().toISOString(),
+      }
         model_url: publicUrl,
         nickname: user.email?.split("@")[0] || "Player",
         updated_at: new Date().toISOString(),
@@ -338,7 +378,36 @@ export default function Home() {
         }
       }
 
-      setSavedModelUrl(publicUrl)
+      const { data: existingPlayer, error: existingPlayerError } = await supabase
+        .from("players")
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle()
+
+      if (existingPlayerError) {
+        throw new Error(`Could not verify saved character: ${existingPlayerError.message}`)
+      }
+
+      if (existingPlayer) {
+        const { error: updateError } = await supabase
+          .from("players")
+          .update(payload)
+          .eq("user_id", user.id)
+
+        if (updateError) {
+          throw new Error(`Failed to update saved character: ${updateError.message}`)
+        }
+      } else {
+        const { error: insertError } = await supabase
+          .from("players")
+          .insert(payload)
+
+        if (insertError) {
+          throw new Error(`Failed to save character: ${insertError.message}`)
+        }
+      }
+
+      setSavedModelUrl(payload.model_url)
 
       await startRiggingForUploadedModel(publicUrl)
     } catch (uploadErr) {
