@@ -203,10 +203,10 @@ export function ModelViewer({ modelUrl, animationUrl }: ViewerProps) {
 
   // Keyboard controls for Ecctrl
   const keyboardMap = [
-    { name: "forward", keys: ["ArrowUp", "KeyW"] },
-    { name: "backward", keys: ["ArrowDown", "KeyS"] },
-    { name: "left", keys: ["ArrowLeft", "KeyA"] },
-    { name: "right", keys: ["ArrowRight", "KeyD"] },
+    { name: "forward", keys: ["ArrowUp"] },
+    { name: "backward", keys: ["ArrowDown"] },
+    { name: "left", keys: ["ArrowLeft"] },
+    { name: "right", keys: ["ArrowRight"] },
     { name: "jump", keys: ["Space"] },
     { name: "run", keys: ["Shift"] },
   ]
@@ -276,7 +276,7 @@ export function ModelViewer({ modelUrl, animationUrl }: ViewerProps) {
       </ErrorBoundary>
 
       <div className="absolute bottom-4 left-4 rounded-lg bg-background/80 px-3 py-2 text-xs text-muted-foreground backdrop-blur-sm">
-        {isWalkingMode ? "Click to focus | WASD to move | Mouse to look" : "Drag to rotate | Scroll to zoom"}
+        {isWalkingMode ? "Click to focus | Arrow keys to move | Mouse to look" : "Drag to rotate | Scroll to zoom"}
       </div>
     </div>
   )
