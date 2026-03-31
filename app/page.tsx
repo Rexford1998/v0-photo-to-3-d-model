@@ -84,7 +84,7 @@ export default function Home() {
         const { data: playerData } = await supabase
           .from('players')
           .select('model_url')
-          .eq('user_id', user.id)
+          .eq('nickname', user.email?.split("@")[0] || "Player")
           .single()
         
         if (playerData?.model_url) {
@@ -115,10 +115,9 @@ export default function Home() {
         const supabase = createClient()
 
         const payload = {
-          user_id: user.id,
+          nickname: user.email?.split("@")[0] || "Player",
           model_url: modelUrl,
           rig_task_id: rigTaskId,
-          nickname: user.email?.split("@")[0] || "Player",
           updated_at: new Date().toISOString(),
         }
         if (!payload.model_url) {
@@ -129,7 +128,7 @@ export default function Home() {
         const { data: existingPlayer, error: existingPlayerError } = await supabase
           .from("players")
           .select("id")
-          .eq("user_id", user.id)
+          .eq("nickname", payload.nickname)
           .maybeSingle()
 
         if (existingPlayerError) {
@@ -141,7 +140,7 @@ export default function Home() {
           const { error: updateError } = await supabase
             .from("players")
             .update(payload)
-            .eq("user_id", user.id)
+            .eq("id", existingPlayer.id)
 
           if (updateError) {
             setSaveError(`Failed to save character: ${updateError.message}`)
@@ -242,10 +241,11 @@ export default function Home() {
 
       if (user) {
         const supabase = createClient()
+        const nickname = user.email?.split("@")[0] || "Player"
         const { data: existingPlayer, error: existingPlayerError } = await supabase
           .from("players")
           .select("id")
-          .eq("user_id", user.id)
+          .eq("nickname", nickname)
           .maybeSingle()
 
         if (existingPlayerError) {
@@ -259,7 +259,7 @@ export default function Home() {
               rig_task_id: riggingData.taskId,
               updated_at: new Date().toISOString(),
             })
-            .eq("user_id", user.id)
+            .eq("id", existingPlayer.id)
 
           if (updateError) {
             throw new Error(`Failed to save rigging task: ${updateError.message}`)
@@ -337,16 +337,15 @@ export default function Home() {
       setUploadedModelUrl(savablePublicUrl)
 
       const payload = {
-        user_id: user.id,
-        model_url: publicUrl,
         nickname: user.email?.split("@")[0] || "Player",
+        model_url: publicUrl,
         updated_at: new Date().toISOString(),
       }
 
       const { data: existingPlayer, error: existingPlayerError } = await supabase
         .from("players")
         .select("id")
-        .eq("user_id", user.id)
+        .eq("nickname", payload.nickname)
         .maybeSingle()
 
       if (existingPlayerError) {
@@ -357,7 +356,7 @@ export default function Home() {
         const { error: updateError } = await supabase
           .from("players")
           .update(payload)
-          .eq("user_id", user.id)
+          .eq("id", existingPlayer.id)
 
         if (updateError) {
           throw new Error(`Failed to update saved character: ${updateError.message}`)

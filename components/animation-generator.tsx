@@ -38,21 +38,22 @@ export function AnimationGenerator({ rigTaskId, userId }: AnimationGeneratorProp
   // Load saved animations on mount
   useEffect(() => {
     const loadSavedAnimations = async () => {
-      const supabase = createClient()
-      const { data } = await supabase
-        .from("player_animations")
-        .select("animation_id, animation_name, animation_url")
-        .eq("user_id", userId)
+      // TODO: Implement saved animations lookup without user_id
+      // const supabase = createClient()
+      // const { data } = await supabase
+      //   .from("player_animations")
+      //   .select("animation_id, animation_name, animation_url")
+      //   .eq("nickname", nickname)
 
-      if (data && data.length > 0) {
-        setGeneratedAnimations(
-          data.map((a) => ({
-            id: a.animation_id,
-            name: a.animation_name,
-            modelUrl: a.animation_url,
-          }))
-        )
-      }
+      // if (data && data.length > 0) {
+      //   setGeneratedAnimations(
+      //     data.map((a) => ({
+      //       id: a.animation_id,
+      //       name: a.animation_name,
+      //       modelUrl: a.animation_url,
+      //     }))
+      //   )
+      // }
     }
     loadSavedAnimations()
   }, [userId])
