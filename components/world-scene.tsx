@@ -18,6 +18,12 @@ interface Player {
   color: string
 }
 
+const BEACH_ASSET_URLS = {
+  palmTree: "/api/beach-assets/palm-tree",
+  rock: "/api/beach-assets/rock",
+  rockyPondOasis: "/api/beach-assets/rocky-pond-oasis",
+} as const
+
 // Proxy URL helper for external model URLs
 function getProxiedUrl(url: string): string {
   if (!url) return url
@@ -287,81 +293,124 @@ function LocalPlayerCharacter({ player, positionRef, rotationRef, modelUrl, orig
   )
 }
 
-// Tropical palm tree component
-function PalmTree({ position }: { position: [number, number, number] }) {
-  const trunkHeight = 4
-  const frondRadius = 3
-  
+function StaticBeachProp({
+  url,
+  position,
+  rotation = [0, 0, 0],
+  targetSize,
+  verticalOffset = 0,
+}: {
+  url: string
+  position: [number, number, number]
+  rotation?: [number, number, number]
+  targetSize: number
+  verticalOffset?: number
+}) {
+  const { scene } = useGLTF(url)
+
+  const clonedScene = useMemo(() => {
+    const cloned = scene.clone(true)
+
+    cloned.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.castShadow = true
+        child.receiveShadow = true
+      }
+    })
+
+    cloned.updateMatrixWorld(true)
+
+    const box = new THREE.Box3().setFromObject(cloned)
+    const size = box.getSize(new THREE.Vector3())
+    const maxDimension = Math.max(size.x, size.y, size.z) || 1
+    const scale = targetSize / maxDimension
+
+    cloned.scale.setScalar(scale)
+    cloned.updateMatrixWorld(true)
+
+    const scaledBox = new THREE.Box3().setFromObject(cloned)
+    const center = scaledBox.getCenter(new THREE.Vector3())
+
+    cloned.position.x = -center.x
+    cloned.position.y = -scaledBox.min.y + verticalOffset
+    cloned.position.z = -center.z
+    cloned.updateMatrixWorld(true)
+
+    return cloned
+  }, [scene, targetSize, verticalOffset])
+
   return (
-    <group position={position}>
-      {/* Trunk */}
-      <mesh castShadow receiveShadow position={[0, trunkHeight / 2, 0]}>
-        <cylinderGeometry args={[0.3, 0.4, trunkHeight, 8]} />
-        <meshStandardMaterial color="#8B6F47" />
-      </mesh>
-      
-      {/* Fronds - cluster of geometry */}
-      {[0, 1, 2, 3, 4].map((i) => (
-        <mesh key={i} castShadow position={[0, trunkHeight, 0]} rotation={[0, (i * Math.PI * 2) / 5, Math.PI / 3]}>
-          <coneGeometry args={[frondRadius, 1.5, 8]} />
-          <meshStandardMaterial color="#2D5016" />
-        </mesh>
-      ))}
+    <group position={position} rotation={rotation}>
+      <primitive object={clonedScene} dispose={null} />
     </group>
   )
 }
 
-// Beach umbrella component
-function BeachUmbrella({ position }: { position: [number, number, number] }) {
+function BeachScenery() {
   return (
-    <group position={position}>
-      {/* Pole */}
-      <mesh castShadow position={[0, 0.75, 0]}>
-        <cylinderGeometry args={[0.08, 0.1, 1.5, 8]} />
-        <meshStandardMaterial color="#8B7355" />
-      </mesh>
-      
-      {/* Umbrella canopy */}
-      <mesh castShadow position={[0, 1.5, 0]}>
-        <coneGeometry args={[1.2, 0.3, 16]} />
-        <meshStandardMaterial color="#FF6B6B" />
-      </mesh>
-    </group>
-  )
-}
+    <>
+      <StaticBeachProp
+        url={BEACH_ASSET_URLS.rockyPondOasis}
+        position={[-7.5, -0.45, -0.2]}
+        rotation={[0, Math.PI / 2.1, 0]}
+        targetSize={6.8}
+        verticalOffset={-0.18}
+      />
 
-// Rock cluster component
-function RockCluster({ position }: { position: [number, number, number] }) {
-  return (
-    <group position={position}>
-      {[0, 1, 2].map((i) => (
-        <mesh key={i} castShadow receiveShadow position={[Math.cos((i * Math.PI * 2) / 3) * 0.5, 0.3, Math.sin((i * Math.PI * 2) / 3) * 0.5]}>
-          <dodecahedronGeometry args={[0.4]} />
-          <meshStandardMaterial color="#A9A9A9" roughness={0.8} />
-        </mesh>
-      ))}
-    </group>
-  )
-}
+      <StaticBeachProp
+        url={BEACH_ASSET_URLS.palmTree}
+        position={[-3.4, 0, -3.2]}
+        rotation={[0, Math.PI * 0.08, 0]}
+        targetSize={5.2}
+      />
+      <StaticBeachProp
+        url={BEACH_ASSET_URLS.palmTree}
+        position={[3.1, 0, -4.1]}
+        rotation={[0, -Math.PI * 0.16, 0]}
+        targetSize={5.8}
+      />
+      <StaticBeachProp
+        url={BEACH_ASSET_URLS.palmTree}
+        position={[4.2, 0, 2.1]}
+        rotation={[0, Math.PI * 0.32, 0]}
+        targetSize={5.4}
+      />
+      <StaticBeachProp
+        url={BEACH_ASSET_URLS.palmTree}
+        position={[-4.3, 0, 3.4]}
+        rotation={[0, -Math.PI * 0.28, 0]}
+        targetSize={5.5}
+      />
 
-// Wooden dock component
-function Dock({ position }: { position: [number, number, number] }) {
-  return (
-    <group position={position}>
-      {/* Main platform */}
-      <mesh castShadow receiveShadow position={[0, 0.3, 0]}>
-        <boxGeometry args={[2, 0.2, 6]} />
-        <meshStandardMaterial color="#CD853F" />
-      </mesh>
-      
-      {/* Support posts */}
-      {[[-0.8, 0], [0.8, 0], [-0.8, 4], [0.8, 4]].map((pos, i) => (
-        <mesh key={i} castShadow receiveShadow position={[pos[0], -0.5, pos[1]]}>
-          <cylinderGeometry args={[0.15, 0.15, 1, 8]} />
-          <meshStandardMaterial color="#8B4513" />
-        </mesh>
-      ))}
-    </group>
+      <StaticBeachProp
+        url={BEACH_ASSET_URLS.rock}
+        position={[-5.1, 0, -1.4]}
+        rotation={[0, Math.PI * 0.17, 0]}
+        targetSize={1.7}
+        verticalOffset={-0.08}
+      />
+      <StaticBeachProp
+        url={BEACH_ASSET_URLS.rock}
+        position={[5.2, 0, -2.2]}
+        rotation={[0, -Math.PI * 0.22, 0]}
+        targetSize={1.45}
+        verticalOffset={-0.08}
+      />
+      <StaticBeachProp
+        url={BEACH_ASSET_URLS.rock}
+        position={[0.4, 0, -5.2]}
+        rotation={[0, Math.PI * 0.41, 0]}
+        targetSize={1.6}
+        verticalOffset={-0.08}
+      />
+      <StaticBeachProp
+        url={BEACH_ASSET_URLS.rock}
+        position={[2.6, 0, 4.6]}
+        rotation={[0, -Math.PI * 0.37, 0]}
+        targetSize={1.3}
+        verticalOffset={-0.08}
+      />
+    </>
   )
 }
 
@@ -380,32 +429,12 @@ function IslandEnvironment() {
         <cylinderGeometry args={[1, 1, 1, 32]} />
         <meshStandardMaterial color="#7CB342" />
       </mesh>
-      
-      {/* Lagoon on the side */}
-      <mesh receiveShadow position={[-7, -0.3, 0]} scale={[2.5, 0.3, 3]}>
-        <cylinderGeometry args={[1, 1, 1, 32]} />
-        <meshStandardMaterial color="#4DA6FF" transparent opacity={0.7} />
-      </mesh>
-      
-      {/* Palm trees scattered around */}
-      <PalmTree position={[-3, 0, -3]} />
-      <PalmTree position={[3, 0, -4]} />
-      <PalmTree position={[4, 0, 2]} />
-      <PalmTree position={[-4, 0, 3]} />
-      <PalmTree position={[2, 0, 3.5]} />
-      
-      {/* Beach umbrellas */}
-      <BeachUmbrella position={[-2, 0, -2]} />
-      <BeachUmbrella position={[1.5, 0, -3]} />
-      <BeachUmbrella position={[3, 0, 1]} />
-      
-      {/* Rock clusters */}
-      <RockCluster position={[-5, 0, -1]} />
-      <RockCluster position={[5, 0, -2]} />
-      <RockCluster position={[0, 0, -5]} />
-      
-      {/* Wooden dock extending to water */}
-      <Dock position={[-7.5, 0, 0]} />
+
+      <ErrorBoundaryModel fallback={null}>
+        <React.Suspense fallback={null}>
+          <BeachScenery />
+        </React.Suspense>
+      </ErrorBoundaryModel>
     </group>
   )
 }
@@ -709,3 +738,7 @@ export default function WorldScene({ players, localPlayerId, modelUrl, originalM
     </div>
   )
 }
+
+useGLTF.preload(BEACH_ASSET_URLS.palmTree)
+useGLTF.preload(BEACH_ASSET_URLS.rock)
+useGLTF.preload(BEACH_ASSET_URLS.rockyPondOasis)
