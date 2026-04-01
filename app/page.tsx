@@ -47,6 +47,7 @@ function getSavableModelUrl(url: string): string | null {
 
 export default function Home() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [uploadedPreviewUrl, setUploadedPreviewUrl] = useState<string | null>(null)
   const [uploadedModelUrl, setUploadedModelUrl] = useState<string | null>(null)
   const [user, setUser] = useState<SupabaseUser | null>(null)
   const [savedModelUrl, setSavedModelUrl] = useState<string | null>(null)
@@ -184,6 +185,7 @@ export default function Home() {
 
   const handleReset = () => {
     setSelectedImage(null)
+    setUploadedPreviewUrl(null)
     setUploadedModelUrl(null)
     setUploadedRigTaskId(null)
     setUploadedAnimationUrl(null)
@@ -280,13 +282,15 @@ export default function Home() {
   }
 
   const handleModelUpload = async (file: File, localUrl: string) => {
-    setUploadedModelUrl(localUrl)
+    setUploadedPreviewUrl(localUrl)
+    setUploadedModelUrl(null)
     setUploadedRigTaskId(null)
     setUploadedAnimationUrl(null)
     setUploadError(null)
     setSaveError(null)
 
     if (!user) {
+      setUploadError("Log in to upload your model to storage before joining the multiplayer world.")
       return
     }
 
@@ -385,20 +389,28 @@ export default function Home() {
   }
 
   const isProcessing = stage === "generating" || stage === "rigging" || stage === "uploading" || isUploadingModel
-  const showModel = (stage === "complete" && modelUrl) || uploadedModelUrl
-  const displayModelUrl = uploadedModelUrl || modelUrl
+  const showModel = (stage === "complete" && modelUrl) || uploadedPreviewUrl || uploadedModelUrl
+  const displayModelUrl = uploadedPreviewUrl || uploadedModelUrl || modelUrl
   const displayAnimationUrl = uploadedModelUrl ? uploadedAnimationUrl : animationUrl
   const displayRigTaskId = uploadedModelUrl ? uploadedRigTaskId : rigTaskId
+  const multiplayerModelUrl = uploadedModelUrl || modelUrl
 
   const renderMultiplayerCta = () => {
-    if (!displayModelUrl) return null
+    if (!multiplayerModelUrl) return null
 
     if (user) {
       return (
         <div className="flex flex-col items-center gap-4 mt-6">
-          {!isUploadingModel && <p className="text-sm text-green-600">Model saved to your account!</p>}
-          <Link href={`/world?modelUrl=${encodeURIComponent(displayModelUrl)}`}>
-            <Button size="lg" className="h-12 px-8 text-base font-semibold bg-green-600 hover:bg-green-700">
+          {uploadedPreviewUrl && !uploadedModelUrl && isUploadingModel && (
+            <p className="text-sm text-muted-foreground">Uploading model to storage before multiplayer...</p>
+          )}
+          {uploadedModelUrl && !isUploadingModel && <p className="text-sm text-green-600">Model saved to your account!</p>}
+          <Link href={`/world?modelUrl=${encodeURIComponent(multiplayerModelUrl)}`}>
+            <Button
+              size="lg"
+              className="h-12 px-8 text-base font-semibold bg-green-600 hover:bg-green-700"
+              disabled={Boolean(uploadedPreviewUrl && !uploadedModelUrl)}
+            >
               <Gamepad2 className="mr-2 h-5 w-5" />
               Join Multiplayer World
             </Button>
@@ -641,12 +653,13 @@ export default function Home() {
               <ModelViewer modelUrl={displayModelUrl!} animationUrl={displayAnimationUrl || undefined} />
             </div>
 
-            {uploadedModelUrl && (
+            {uploadedPreviewUrl && (
               <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-blue-500/10 p-3 text-sm text-blue-600 mt-4">
                 <div className="flex items-center gap-2">
                   <Package className="h-4 w-4" />
-                  <strong>Uploaded model loaded:</strong> Your uploaded model can be rigged, animated, and saved.
+                  <strong>Uploaded model loaded:</strong> Preview is ready{uploadedModelUrl ? " and the hosted copy is ready for multiplayer." : "."}
                 </div>
+                {user && uploadedPreviewUrl && !uploadedModelUrl && <p className="text-xs">Uploading to storage now. Multiplayer will unlock once the hosted URL is ready.</p>}
                 {!user && <p className="text-xs">Log in to save this uploaded model and generate animations.</p>}
               </div>
             )}
