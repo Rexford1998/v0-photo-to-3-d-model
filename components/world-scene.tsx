@@ -56,13 +56,8 @@ function GLBModel({ animatedUrl, originalUrl, isMoving }: { animatedUrl: string;
   const proxiedAnimatedUrl = getProxiedUrl(animatedUrl)
   const proxiedOriginalUrl = getProxiedUrl(originalUrl)
 
-  // Configure useGLTF to handle blob URLs with proper CORS settings
-  const glbOptions = {
-    crossOrigin: 'anonymous' as const,
-  }
-
-  const { scene: animatedScene, animations } = useGLTF(proxiedAnimatedUrl, true, undefined, glbOptions)
-  const { scene: originalScene } = useGLTF(proxiedOriginalUrl, true, undefined, glbOptions)
+  const { scene: animatedScene, animations } = useGLTF(proxiedAnimatedUrl)
+  const { scene: originalScene } = useGLTF(proxiedOriginalUrl)
   
   // Clone and scale the scene, memoized per scene change
   const scaledClone = useMemo(() => {
@@ -169,11 +164,8 @@ function GLBModel({ animatedUrl, originalUrl, isMoving }: { animatedUrl: string;
 // Get available animations from a model
 export function useModelAnimations(modelUrl: string): string[] {
   const proxiedUrl = getProxiedUrl(modelUrl)
-  const glbOptions = {
-    crossOrigin: 'anonymous' as const,
-  }
   try {
-    const { animations } = useGLTF(proxiedUrl, true, undefined, glbOptions)
+    const { animations } = useGLTF(proxiedUrl)
     return animations.map(a => a.name)
   } catch {
     return []
