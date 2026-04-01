@@ -9,6 +9,11 @@ import { useEffect, useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
 
 const supabase = createClient()
+const CHAT_RETENTION_HOURS = 8
+
+function getChatRetentionCutoffIso() {
+  return new Date(Date.now() - CHAT_RETENTION_HOURS * 60 * 60 * 1000).toISOString()
+}
 
 interface Player {
   id: string
@@ -94,6 +99,7 @@ export function useMultiplayerWorld(modelUrl: string = "", country: string = "Un
     async (nickname: string, color: string, country: string) => {
       try {
         setError(null)
+        const chatRetentionCutoff = getChatRetentionCutoffIso()
 
         // Get current user
         const { data: { user } } = await supabase.auth.getUser()
@@ -179,10 +185,19 @@ export function useMultiplayerWorld(modelUrl: string = "", country: string = "Un
           .from("chat_messages")
           .select("*")
           .eq("country", country)
+          .gte("created_at", chatRetentionCutoff)
           .order("created_at", { ascending: false })
           .limit(50)
 
         setChatMessages((recentChat || []).reverse())
+
+        // Opportunistically clean up expired chat rows for this country.
+        await supabase
+          .from("chat_messages")
+          .delete()
+          .eq("country", country)
+          .lt("created_at", chatRetentionCutoff)
+
         return true
       } catch (err) {
         console.error("[v0] Join error:", err)
@@ -219,6 +234,14 @@ export function useMultiplayerWorld(modelUrl: string = "", country: string = "Un
       if (!playerId || !message.trim()) return
 
       try {
+        const chatRetentionCutoff = getChatRetentionCutoffIso()
+
+        await supabase
+          .from("chat_messages")
+          .delete()
+          .eq("country", country)
+          .lt("created_at", chatRetentionCutoff)
+
         await supabase.from("chat_messages").insert([
           {
             player_id: playerId,

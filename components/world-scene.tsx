@@ -24,6 +24,10 @@ const BEACH_ASSET_URLS = {
   rockyPondOasis: "/models/beach/rocky-pond-oasis.glb",
 } as const
 
+function lerpAngle(current: number, target: number, alpha: number) {
+  return current + THREE.MathUtils.angleDifference(target, current) * alpha
+}
+
 // Proxy URL helper for external model URLs
 function getProxiedUrl(url: string): string {
   if (!url) return url
@@ -518,7 +522,7 @@ function RandomWalkingBot({ modelUrl, startPosition }: { modelUrl: string; start
     }
 
     const targetAngle = Math.atan2(dx, dz)
-    bot.rotation = THREE.MathUtils.lerpAngle(bot.rotation, targetAngle, rotationSpeed)
+    bot.rotation = lerpAngle(bot.rotation, targetAngle, rotationSpeed)
 
     const step = Math.min(speed, distance)
     bot.position.x += Math.sin(bot.rotation) * step
