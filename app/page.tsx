@@ -37,9 +37,7 @@ const STEPS = [
 ]
 
 function getSavableModelUrl(url: string): string | null {
-  if (!url) return null
-  // Blob URLs are valid and can be saved directly
-  if (url.startsWith("blob:")) return url
+  if (!url || url.startsWith("blob:")) return null
   if (url.startsWith("/api/proxy-model?url=")) return url
   if (url.startsWith("http://") || url.startsWith("https://")) {
     return `/api/proxy-model?url=${encodeURIComponent(url)}`
@@ -196,19 +194,6 @@ export default function Home() {
     reset()
   }
 
-  const convertUrlToBlob = async (url: string): Promise<string> => {
-    try {
-      const response = await fetch(url)
-      if (!response.ok) throw new Error(`Failed to fetch model: ${response.statusText}`)
-      const blob = await response.blob()
-      return URL.createObjectURL(blob)
-    } catch (err) {
-      console.error("[v0] Failed to convert URL to blob:", err)
-      // Fall back to proxy URL if blob conversion fails
-      return `/api/proxy-model?url=${encodeURIComponent(url)}`
-    }
-  }
-
   const pollUploadedRiggingTask = async (taskId: string) => {
     const maxAttempts = 120
     let attempts = 0
@@ -284,13 +269,9 @@ export default function Home() {
 
       const riggingTask = await pollUploadedRiggingTask(riggingData.taskId)
       if (riggingTask.result?.basic_animations?.walking_glb_url) {
-        // Convert external Meshy URL to blob URL for storage
-        const blobUrl = await convertUrlToBlob(riggingTask.result.basic_animations.walking_glb_url)
-        setUploadedAnimationUrl(blobUrl)
+        setUploadedAnimationUrl(riggingTask.result.basic_animations.walking_glb_url)
       } else if (riggingTask.result?.rigged_character_glb_url) {
-        // Convert external Meshy URL to blob URL for storage
-        const blobUrl = await convertUrlToBlob(riggingTask.result.rigged_character_glb_url)
-        setUploadedAnimationUrl(blobUrl)
+        setUploadedAnimationUrl(riggingTask.result.rigged_character_glb_url)
       }
     } catch (riggingError) {
       console.warn("[v0] Uploaded model rigging failed:", riggingError)

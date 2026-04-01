@@ -64,8 +64,6 @@ function GLBModel({ animatedUrl, originalUrl, isMoving }: { animatedUrl: string;
   const proxiedAnimatedUrl = getProxiedUrl(animatedUrl)
   const proxiedOriginalUrl = getProxiedUrl(originalUrl)
 
-  console.log("[v0] GLBModel loading - animated:", proxiedAnimatedUrl, "original:", proxiedOriginalUrl)
-
   const { scene: animatedScene, animations } = useGLTF(proxiedAnimatedUrl)
   const { scene: originalScene } = useGLTF(proxiedOriginalUrl)
   
