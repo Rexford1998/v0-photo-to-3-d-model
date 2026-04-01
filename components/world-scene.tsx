@@ -410,27 +410,27 @@ function IslandEnvironment() {
   )
 }
 
-// Bot character that walks around randomly
-function BotCharacter() {
+// Reusable bot character component
+function RandomWalkingBot({ modelUrl, name, startPosition }: { modelUrl: string; name: string; startPosition: { x: number; z: number } }) {
   const groupRef = useRef<THREE.Group>(null)
   const botStateRef = useRef({
-    position: { x: 0, z: 0 },
+    position: { x: startPosition.x, z: startPosition.z },
     rotation: 0,
-    targetPosition: { x: 0, z: 0 },
+    targetPosition: { x: startPosition.x + 2, z: startPosition.z + 2 },
     targetRotation: 0,
     moveTimer: 0,
   })
   const [isMoving, setIsMoving] = useState(false)
 
-  // Initialize random target position on mount
+  // Initialize with a random direction
   useEffect(() => {
-    console.log("[v0] BotCharacter mounted")
-    const getRandomPosition = () => ({
-      x: (Math.random() - 0.5) * 12,
-      z: (Math.random() - 0.5) * 12,
-    })
-    botStateRef.current.targetPosition = getRandomPosition()
-  }, [])
+    const randomAngle = Math.random() * Math.PI * 2
+    const distance = 3 + Math.random() * 5
+    botStateRef.current.targetPosition = {
+      x: startPosition.x + Math.cos(randomAngle) * distance,
+      z: startPosition.z + Math.sin(randomAngle) * distance,
+    }
+  }, [startPosition])
 
   useFrame(() => {
     if (!groupRef.current) return
@@ -448,14 +448,12 @@ function BotCharacter() {
     if (distance < 0.5) {
       bot.moveTimer++
       if (bot.moveTimer > 120) {
-        // Every ~2 seconds, pick new target
-        const angle = Math.atan2(dz, dx)
-        const randomOffset = (Math.random() - 0.5) * Math.PI
-        const newAngle = angle + randomOffset
-        const distance = 3 + Math.random() * 5
+        // Every ~2 seconds, pick new target in completely random direction
+        const randomAngle = Math.random() * Math.PI * 2
+        const randomDistance = 3 + Math.random() * 5
         bot.targetPosition = {
-          x: bot.position.x + Math.cos(newAngle) * distance,
-          z: bot.position.z + Math.sin(newAngle) * distance,
+          x: bot.position.x + Math.cos(randomAngle) * randomDistance,
+          z: bot.position.z + Math.sin(randomAngle) * randomDistance,
         }
         bot.moveTimer = 0
       }
@@ -494,23 +492,67 @@ function BotCharacter() {
     groupRef.current.rotation.y = bot.rotation
   })
 
-  const botModelUrl = "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Meshy_AI_Very_cute_girl_in_jea_biped_Animation_Running_withSkin-20UTwwBgiVuRPzwbV9R8ne6nVeyf9D.glb"
+  const colors = ["#FF69B4", "#FF6B9D", "#FF69B4", "#FFB6C1"]
+  const color = colors[Math.floor(Math.random() * colors.length)]
 
   return (
-    <group ref={groupRef} position={[0, 0, 0]}>
+    <group ref={groupRef} position={[startPosition.x, 0, startPosition.z]}>
       {/* Bot model with error boundary */}
-      <ErrorBoundaryModel fallback={<CapsuleAvatar color="#FF69B4" />}>
-        <React.Suspense fallback={<CapsuleAvatar color="#FF69B4" />}>
-          <GLBModel animatedUrl={botModelUrl} originalUrl={botModelUrl} isMoving={isMoving} />
+      <ErrorBoundaryModel fallback={<CapsuleAvatar color={color} />}>
+        <React.Suspense fallback={<CapsuleAvatar color={color} />}>
+          <GLBModel animatedUrl={modelUrl} originalUrl={modelUrl} isMoving={isMoving} />
         </React.Suspense>
       </ErrorBoundaryModel>
 
       {/* Name label */}
       <Html position={[0, 1.8, 0]} center>
         <div className="bg-background/90 px-2 py-1 rounded text-xs font-semibold whitespace-nowrap text-foreground border border-border">
-          Meshy Bot
+          {name}
         </div>
       </Html>
+    </group>
+  )
+}
+
+// Bot character that walks around randomly
+function BotCharacter() {
+  const botModels = [
+    {
+      url: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Meshy_AI_Very_cute_girl_in_jea_biped_Animation_Running_withSkin-20UTwwBgiVuRPzwbV9R8ne6nVeyf9D.glb",
+      name: "Bot - Running",
+    },
+    {
+      url: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Meshy_AI_T_Pose_Hoodie_Girl_biped_Animation_Walking_withSkin-W3w8uRp9B0d3AuwHYKBAQ3utQhKzVe.glb",
+      name: "Hoodie Bot",
+    },
+    {
+      url: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Meshy_AI_Very_cute_girl_in_jea_biped_Animation_Walking_withSkin-wRv3zD9dbQut9hPXPrfuKmlXl0oVqY.glb",
+      name: "Jeans Bot",
+    },
+    {
+      url: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Meshy_AI_t_pose_realistic_summ_biped_Animation_Walking_withSkin-RlLhvfw69OhuJf2MULEAhMVKIAohri.glb",
+      name: "Summer Bot",
+    },
+  ]
+
+  // Spawn bots at different positions around the island
+  const botPositions = [
+    { x: -3, z: 2 },
+    { x: 3, z: -2 },
+    { x: 1, z: 3 },
+    { x: -2, z: -3 },
+  ]
+
+  return (
+    <group>
+      {botModels.map((bot, index) => (
+        <RandomWalkingBot
+          key={index}
+          modelUrl={bot.url}
+          name={bot.name}
+          startPosition={botPositions[index % botPositions.length]}
+        />
+      ))}
     </group>
   )
 }
