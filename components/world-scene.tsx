@@ -21,9 +21,15 @@ interface Player {
 // Proxy URL helper for external model URLs
 function getProxiedUrl(url: string): string {
   if (!url) return url
-  if (url.startsWith("/api/proxy-model") || url.startsWith("/") || url.startsWith("blob:") || url.startsWith("data:")) {
+  // Blob URLs, data URLs, and local API routes don't need proxying
+  if (url.startsWith("blob:") || url.startsWith("data:") || url.startsWith("/")) {
     return url
   }
+  // Already a proxied URL
+  if (url.startsWith("/api/proxy-model")) {
+    return url
+  }
+  // External URLs need to be proxied through our API
   return `/api/proxy-model?url=${encodeURIComponent(url)}`
 }
 
@@ -50,8 +56,13 @@ function GLBModel({ animatedUrl, originalUrl, isMoving }: { animatedUrl: string;
   const proxiedAnimatedUrl = getProxiedUrl(animatedUrl)
   const proxiedOriginalUrl = getProxiedUrl(originalUrl)
 
-  const { scene: animatedScene, animations } = useGLTF(proxiedAnimatedUrl)
-  const { scene: originalScene } = useGLTF(proxiedOriginalUrl)
+  // Configure useGLTF to handle blob URLs with proper CORS settings
+  const glbOptions = {
+    crossOrigin: 'anonymous' as const,
+  }
+
+  const { scene: animatedScene, animations } = useGLTF(proxiedAnimatedUrl, true, undefined, glbOptions)
+  const { scene: originalScene } = useGLTF(proxiedOriginalUrl, true, undefined, glbOptions)
   
   // Clone and scale the scene, memoized per scene change
   const scaledClone = useMemo(() => {
@@ -158,8 +169,11 @@ function GLBModel({ animatedUrl, originalUrl, isMoving }: { animatedUrl: string;
 // Get available animations from a model
 export function useModelAnimations(modelUrl: string): string[] {
   const proxiedUrl = getProxiedUrl(modelUrl)
+  const glbOptions = {
+    crossOrigin: 'anonymous' as const,
+  }
   try {
-    const { animations } = useGLTF(proxiedUrl)
+    const { animations } = useGLTF(proxiedUrl, true, undefined, glbOptions)
     return animations.map(a => a.name)
   } catch {
     return []
