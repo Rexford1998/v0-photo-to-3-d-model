@@ -27,12 +27,17 @@ function getProxiedUrl(url: string): string {
     return url
   }
   
-  // Convert relative API routes to absolute URLs for useGLTF compatibility
+  // Already a proxy URL - just convert to absolute
+  if (url.startsWith("/api/proxy-model")) {
+    return `${window.location.origin}${url}`
+  }
+  
+  // Local API routes - convert to absolute
   if (url.startsWith("/api/")) {
     return `${window.location.origin}${url}`
   }
   
-  // Local relative URLs
+  // Local relative URLs - convert to absolute
   if (url.startsWith("/")) {
     return `${window.location.origin}${url}`
   }
