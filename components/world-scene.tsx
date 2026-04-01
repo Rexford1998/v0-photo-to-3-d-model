@@ -21,14 +21,22 @@ interface Player {
 // Proxy URL helper for external model URLs
 function getProxiedUrl(url: string): string {
   if (!url) return url
-  // Blob URLs, data URLs, and local API routes don't need proxying
-  if (url.startsWith("blob:") || url.startsWith("data:") || url.startsWith("/")) {
+  
+  // Blob URLs and data URLs don't need proxying
+  if (url.startsWith("blob:") || url.startsWith("data:")) {
     return url
   }
-  // Already a proxied URL
-  if (url.startsWith("/api/proxy-model")) {
-    return url
+  
+  // Convert relative API routes to absolute URLs for useGLTF compatibility
+  if (url.startsWith("/api/")) {
+    return `${window.location.origin}${url}`
   }
+  
+  // Local relative URLs
+  if (url.startsWith("/")) {
+    return `${window.location.origin}${url}`
+  }
+  
   // External URLs need to be proxied through our API
   return `/api/proxy-model?url=${encodeURIComponent(url)}`
 }
@@ -55,6 +63,8 @@ function GLBModel({ animatedUrl, originalUrl, isMoving }: { animatedUrl: string;
 
   const proxiedAnimatedUrl = getProxiedUrl(animatedUrl)
   const proxiedOriginalUrl = getProxiedUrl(originalUrl)
+
+  console.log("[v0] GLBModel loading - animated:", proxiedAnimatedUrl, "original:", proxiedOriginalUrl)
 
   const { scene: animatedScene, animations } = useGLTF(proxiedAnimatedUrl)
   const { scene: originalScene } = useGLTF(proxiedOriginalUrl)
