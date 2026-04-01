@@ -268,6 +268,129 @@ function LocalPlayerCharacter({ player, positionRef, rotationRef, modelUrl, orig
   )
 }
 
+// Tropical palm tree component
+function PalmTree({ position }: { position: [number, number, number] }) {
+  const trunkHeight = 4
+  const frondRadius = 3
+  
+  return (
+    <group position={position}>
+      {/* Trunk */}
+      <mesh castShadow receiveShadow position={[0, trunkHeight / 2, 0]}>
+        <cylinderGeometry args={[0.3, 0.4, trunkHeight, 8]} />
+        <meshStandardMaterial color="#8B6F47" />
+      </mesh>
+      
+      {/* Fronds - cluster of geometry */}
+      {[0, 1, 2, 3, 4].map((i) => (
+        <mesh key={i} castShadow position={[0, trunkHeight, 0]} rotation={[0, (i * Math.PI * 2) / 5, Math.PI / 3]}>
+          <coneGeometry args={[frondRadius, 1.5, 8]} />
+          <meshStandardMaterial color="#2D5016" />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+// Beach umbrella component
+function BeachUmbrella({ position }: { position: [number, number, number] }) {
+  return (
+    <group position={position}>
+      {/* Pole */}
+      <mesh castShadow position={[0, 0.75, 0]}>
+        <cylinderGeometry args={[0.08, 0.1, 1.5, 8]} />
+        <meshStandardMaterial color="#8B7355" />
+      </mesh>
+      
+      {/* Umbrella canopy */}
+      <mesh castShadow position={[0, 1.5, 0]}>
+        <coneGeometry args={[1.2, 0.3, 16]} />
+        <meshStandardMaterial color="#FF6B6B" />
+      </mesh>
+    </group>
+  )
+}
+
+// Rock cluster component
+function RockCluster({ position }: { position: [number, number, number] }) {
+  return (
+    <group position={position}>
+      {[0, 1, 2].map((i) => (
+        <mesh key={i} castShadow receiveShadow position={[Math.cos((i * Math.PI * 2) / 3) * 0.5, 0.3, Math.sin((i * Math.PI * 2) / 3) * 0.5]}>
+          <dodecahedronGeometry args={[0.4]} />
+          <meshStandardMaterial color="#A9A9A9" roughness={0.8} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+// Wooden dock component
+function Dock({ position }: { position: [number, number, number] }) {
+  return (
+    <group position={position}>
+      {/* Main platform */}
+      <mesh castShadow receiveShadow position={[0, 0.3, 0]}>
+        <boxGeometry args={[2, 0.2, 6]} />
+        <meshStandardMaterial color="#CD853F" />
+      </mesh>
+      
+      {/* Support posts */}
+      {[[-0.8, 0], [0.8, 0], [-0.8, 4], [0.8, 4]].map((pos, i) => (
+        <mesh key={i} castShadow receiveShadow position={[pos[0], -0.5, pos[1]]}>
+          <cylinderGeometry args={[0.15, 0.15, 1, 8]} />
+          <meshStandardMaterial color="#8B4513" />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+// Island environment component
+function IslandEnvironment() {
+  return (
+    <group>
+      {/* Sandy beach base */}
+      <mesh castShadow receiveShadow position={[0, -0.5, 0]} scale={[8, 0.5, 8]}>
+        <cylinderGeometry args={[1, 1, 1, 32]} />
+        <meshStandardMaterial color="#F4A460" />
+      </mesh>
+      
+      {/* Grassy center */}
+      <mesh castShadow receiveShadow position={[0, 0.01, 0]} scale={[4, 0.1, 4]}>
+        <cylinderGeometry args={[1, 1, 1, 32]} />
+        <meshStandardMaterial color="#7CB342" />
+      </mesh>
+      
+      {/* Lagoon on the side */}
+      <mesh receiveShadow position={[-7, -0.3, 0]} scale={[2.5, 0.3, 3]}>
+        <cylinderGeometry args={[1, 1, 1, 32]} />
+        <meshStandardMaterial color="#4DA6FF" transparent opacity={0.7} />
+      </mesh>
+      
+      {/* Palm trees scattered around */}
+      <PalmTree position={[-3, 0, -3]} />
+      <PalmTree position={[3, 0, -4]} />
+      <PalmTree position={[4, 0, 2]} />
+      <PalmTree position={[-4, 0, 3]} />
+      <PalmTree position={[2, 0, 3.5]} />
+      
+      {/* Beach umbrellas */}
+      <BeachUmbrella position={[-2, 0, -2]} />
+      <BeachUmbrella position={[1.5, 0, -3]} />
+      <BeachUmbrella position={[3, 0, 1]} />
+      
+      {/* Rock clusters */}
+      <RockCluster position={[-5, 0, -1]} />
+      <RockCluster position={[5, 0, -2]} />
+      <RockCluster position={[0, 0, -5]} />
+      
+      {/* Wooden dock extending to water */}
+      <Dock position={[-7.5, 0, 0]} />
+    </group>
+  )
+}
+
 // Main scene
 function Scene({ players, localPlayerId, modelUrl, originalModelUrl, onPositionChange }: { players: Player[]; localPlayerId: string | null; modelUrl: string; originalModelUrl: string; onPositionChange: (x: number, z: number, rotation: number) => void }) {
   const cameraRef = useRef<THREE.PerspectiveCamera>(null)
@@ -361,16 +484,26 @@ function Scene({ players, localPlayerId, modelUrl, originalModelUrl, onPositionC
 
   return (
     <>
-      {/* Lighting */}
-      <ambientLight intensity={0.8} />
-      <directionalLight position={[15, 20, 10]} intensity={1.2} castShadow shadow-mapSize={[2048, 2048]} />
-      <pointLight position={[-10, 10, -10]} intensity={0.5} />
+      {/* Warm tropical lighting */}
+      <ambientLight intensity={0.7} color="#FFF8DC" />
+      <directionalLight position={[20, 25, 15]} intensity={1.4} castShadow shadow-mapSize={[2048, 2048]} color="#FFFACD" />
+      <pointLight position={[-15, 12, -15]} intensity={0.4} color="#FFE4B5" />
+      <fogExp2 attach="fog" args={["#E0F6FF", 0.02]} />
 
-      {/* Ground */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, 0, 0]}>
-        <planeGeometry args={[100, 100]} />
-        <meshStandardMaterial color="#ffffff" />
+      {/* Ocean water */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, -1, 0]}>
+        <circleGeometry args={[35, 64]} />
+        <meshStandardMaterial color="#1E90FF" metalness={0.3} roughness={0.4} />
       </mesh>
+
+      {/* Sandy ground/beach area */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, 0.01, 0]}>
+        <circleGeometry args={[15, 32]} />
+        <meshStandardMaterial color="#EDC9AF" />
+      </mesh>
+
+      {/* Tropical island environment */}
+      <IslandEnvironment />
 
       {/* Players */}
       {players.map((player) => (
@@ -381,7 +514,7 @@ function Scene({ players, localPlayerId, modelUrl, originalModelUrl, onPositionC
         )
       ))}
 
-      {/* Environment */}
+      {/* Bright tropical sky */}
       <color attach="background" args={["#87CEEB"]} />
 
       {/* Camera */}
