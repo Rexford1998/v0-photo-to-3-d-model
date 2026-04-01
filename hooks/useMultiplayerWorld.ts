@@ -15,6 +15,18 @@ function getChatRetentionCutoffIso() {
   return new Date(Date.now() - CHAT_RETENTION_HOURS * 60 * 60 * 1000).toISOString()
 }
 
+async function cleanupExpiredChatMessages(country: string, cutoffIso: string) {
+  const { error } = await supabase
+    .from("chat_messages")
+    .delete()
+    .eq("country", country)
+    .lt("created_at", cutoffIso)
+
+  if (error) {
+    console.warn("[v0] Chat cleanup skipped:", error.message)
+  }
+}
+
 interface Player {
   id: string
   nickname: string
@@ -192,11 +204,7 @@ export function useMultiplayerWorld(modelUrl: string = "", country: string = "Un
         setChatMessages((recentChat || []).reverse())
 
         // Opportunistically clean up expired chat rows for this country.
-        await supabase
-          .from("chat_messages")
-          .delete()
-          .eq("country", country)
-          .lt("created_at", chatRetentionCutoff)
+        await cleanupExpiredChatMessages(country, chatRetentionCutoff)
 
         return true
       } catch (err) {
@@ -236,11 +244,7 @@ export function useMultiplayerWorld(modelUrl: string = "", country: string = "Un
       try {
         const chatRetentionCutoff = getChatRetentionCutoffIso()
 
-        await supabase
-          .from("chat_messages")
-          .delete()
-          .eq("country", country)
-          .lt("created_at", chatRetentionCutoff)
+        await cleanupExpiredChatMessages(country, chatRetentionCutoff)
 
         await supabase.from("chat_messages").insert([
           {

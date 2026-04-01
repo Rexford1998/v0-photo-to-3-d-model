@@ -25,7 +25,10 @@ const BEACH_ASSET_URLS = {
 } as const
 
 function lerpAngle(current: number, target: number, alpha: number) {
-  return current + THREE.MathUtils.angleDifference(target, current) * alpha
+  let delta = target - current
+  while (delta > Math.PI) delta -= Math.PI * 2
+  while (delta < -Math.PI) delta += Math.PI * 2
+  return current + delta * alpha
 }
 
 // Proxy URL helper for external model URLs
