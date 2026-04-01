@@ -346,70 +346,79 @@ function StaticBeachProp({
   )
 }
 
+const SCATTERED_PALM_TREES: Array<{
+  position: [number, number, number]
+  rotation: [number, number, number]
+  targetSize: number
+}> = [
+  { position: [-4.8, 0, -3.9], rotation: [0, Math.PI * 0.12, 0], targetSize: 5.1 },
+  { position: [-1.9, 0, -5.6], rotation: [0, -Math.PI * 0.08, 0], targetSize: 4.8 },
+  { position: [2.9, 0, -4.8], rotation: [0, -Math.PI * 0.18, 0], targetSize: 5.6 },
+  { position: [5.2, 0, -0.6], rotation: [0, Math.PI * 0.28, 0], targetSize: 5.3 },
+  { position: [4.4, 0, 3.1], rotation: [0, Math.PI * 0.36, 0], targetSize: 5.2 },
+  { position: [0.8, 0, 5.7], rotation: [0, -Math.PI * 0.21, 0], targetSize: 5.5 },
+  { position: [-3.8, 0, 4.2], rotation: [0, -Math.PI * 0.3, 0], targetSize: 5.4 },
+]
+
+const SCATTERED_ROCKS: Array<{
+  position: [number, number, number]
+  rotation: [number, number, number]
+  targetSize: number
+  verticalOffset: number
+}> = [
+  { position: [-5.7, 0, -1.9], rotation: [0, Math.PI * 0.14, 0], targetSize: 1.7, verticalOffset: -0.08 },
+  { position: [-3.1, 0, 2.6], rotation: [0, -Math.PI * 0.11, 0], targetSize: 1.2, verticalOffset: -0.08 },
+  { position: [-0.4, 0, -6], rotation: [0, Math.PI * 0.4, 0], targetSize: 1.5, verticalOffset: -0.08 },
+  { position: [2.2, 0, -2.8], rotation: [0, -Math.PI * 0.24, 0], targetSize: 1.35, verticalOffset: -0.08 },
+  { position: [5.9, 0, -2.4], rotation: [0, -Math.PI * 0.2, 0], targetSize: 1.45, verticalOffset: -0.08 },
+  { position: [4.6, 0, 4.8], rotation: [0, Math.PI * 0.33, 0], targetSize: 1.3, verticalOffset: -0.08 },
+  { position: [-1.7, 0, 5.1], rotation: [0, -Math.PI * 0.37, 0], targetSize: 1.25, verticalOffset: -0.08 },
+]
+
+const SCATTERED_OASES: Array<{
+  position: [number, number, number]
+  rotation: [number, number, number]
+  targetSize: number
+  verticalOffset: number
+}> = [
+  { position: [-8, -0.45, -0.3], rotation: [0, Math.PI / 2.2, 0], targetSize: 6.8, verticalOffset: -0.18 },
+  { position: [7.3, -0.45, 2.8], rotation: [0, -Math.PI / 2.8, 0], targetSize: 4.9, verticalOffset: -0.14 },
+]
+
 function BeachScenery() {
   return (
     <>
-      <StaticBeachProp
-        url={BEACH_ASSET_URLS.rockyPondOasis}
-        position={[-7.5, -0.45, -0.2]}
-        rotation={[0, Math.PI / 2.1, 0]}
-        targetSize={6.8}
-        verticalOffset={-0.18}
-      />
+      {SCATTERED_OASES.map((oasis, index) => (
+        <StaticBeachProp
+          key={`oasis-${index}`}
+          url={BEACH_ASSET_URLS.rockyPondOasis}
+          position={oasis.position}
+          rotation={oasis.rotation}
+          targetSize={oasis.targetSize}
+          verticalOffset={oasis.verticalOffset}
+        />
+      ))}
 
-      <StaticBeachProp
-        url={BEACH_ASSET_URLS.palmTree}
-        position={[-3.4, 0, -3.2]}
-        rotation={[0, Math.PI * 0.08, 0]}
-        targetSize={5.2}
-      />
-      <StaticBeachProp
-        url={BEACH_ASSET_URLS.palmTree}
-        position={[3.1, 0, -4.1]}
-        rotation={[0, -Math.PI * 0.16, 0]}
-        targetSize={5.8}
-      />
-      <StaticBeachProp
-        url={BEACH_ASSET_URLS.palmTree}
-        position={[4.2, 0, 2.1]}
-        rotation={[0, Math.PI * 0.32, 0]}
-        targetSize={5.4}
-      />
-      <StaticBeachProp
-        url={BEACH_ASSET_URLS.palmTree}
-        position={[-4.3, 0, 3.4]}
-        rotation={[0, -Math.PI * 0.28, 0]}
-        targetSize={5.5}
-      />
+      {SCATTERED_PALM_TREES.map((tree, index) => (
+        <StaticBeachProp
+          key={`palm-${index}`}
+          url={BEACH_ASSET_URLS.palmTree}
+          position={tree.position}
+          rotation={tree.rotation}
+          targetSize={tree.targetSize}
+        />
+      ))}
 
-      <StaticBeachProp
-        url={BEACH_ASSET_URLS.rock}
-        position={[-5.1, 0, -1.4]}
-        rotation={[0, Math.PI * 0.17, 0]}
-        targetSize={1.7}
-        verticalOffset={-0.08}
-      />
-      <StaticBeachProp
-        url={BEACH_ASSET_URLS.rock}
-        position={[5.2, 0, -2.2]}
-        rotation={[0, -Math.PI * 0.22, 0]}
-        targetSize={1.45}
-        verticalOffset={-0.08}
-      />
-      <StaticBeachProp
-        url={BEACH_ASSET_URLS.rock}
-        position={[0.4, 0, -5.2]}
-        rotation={[0, Math.PI * 0.41, 0]}
-        targetSize={1.6}
-        verticalOffset={-0.08}
-      />
-      <StaticBeachProp
-        url={BEACH_ASSET_URLS.rock}
-        position={[2.6, 0, 4.6]}
-        rotation={[0, -Math.PI * 0.37, 0]}
-        targetSize={1.3}
-        verticalOffset={-0.08}
-      />
+      {SCATTERED_ROCKS.map((rock, index) => (
+        <StaticBeachProp
+          key={`rock-${index}`}
+          url={BEACH_ASSET_URLS.rock}
+          position={rock.position}
+          rotation={rock.rotation}
+          targetSize={rock.targetSize}
+          verticalOffset={rock.verticalOffset}
+        />
+      ))}
     </>
   )
 }
