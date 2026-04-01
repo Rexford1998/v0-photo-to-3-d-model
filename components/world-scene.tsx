@@ -19,9 +19,9 @@ interface Player {
 }
 
 const BEACH_ASSET_URLS = {
-  palmTree: "/api/beach-assets/palm-tree",
-  rock: "/api/beach-assets/rock",
-  rockyPondOasis: "/api/beach-assets/rocky-pond-oasis",
+  palmTree: "/models/beach/palm-tree.glb",
+  rock: "/models/beach/rock.glb",
+  rockyPondOasis: "/models/beach/rocky-pond-oasis.glb",
 } as const
 
 // Proxy URL helper for external model URLs
@@ -423,6 +423,33 @@ function BeachScenery() {
   )
 }
 
+const BOT_WALK_RADIUS = 6.5
+
+function pickBotTarget(origin?: { x: number; z: number }) {
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const angle = Math.random() * Math.PI * 2
+    const radius = 1.8 + Math.random() * 4
+    const baseX = origin?.x ?? 0
+    const baseZ = origin?.z ?? 0
+    const candidate = {
+      x: baseX + Math.cos(angle) * radius,
+      z: baseZ + Math.sin(angle) * radius,
+    }
+
+    const distanceFromCenter = Math.hypot(candidate.x, candidate.z)
+    if (distanceFromCenter <= BOT_WALK_RADIUS) {
+      return candidate
+    }
+  }
+
+  const fallbackAngle = Math.random() * Math.PI * 2
+  const fallbackRadius = 2 + Math.random() * (BOT_WALK_RADIUS - 2)
+  return {
+    x: Math.cos(fallbackAngle) * fallbackRadius,
+    z: Math.sin(fallbackAngle) * fallbackRadius,
+  }
+}
+
 // Island environment component
 function IslandEnvironment() {
   return (
@@ -449,105 +476,77 @@ function IslandEnvironment() {
 }
 
 // Reusable bot character component
-function RandomWalkingBot({ modelUrl, name, startPosition }: { modelUrl: string; name: string; startPosition: { x: number; z: number } }) {
+function RandomWalkingBot({ modelUrl, startPosition }: { modelUrl: string; startPosition: { x: number; z: number } }) {
   const groupRef = useRef<THREE.Group>(null)
   const botStateRef = useRef({
     position: { x: startPosition.x, z: startPosition.z },
     rotation: 0,
-    targetPosition: { x: startPosition.x + 2, z: startPosition.z + 2 },
-    targetRotation: 0,
-    moveTimer: 0,
+    targetPosition: { x: startPosition.x, z: startPosition.z },
+    idleFrames: 0,
   })
   const [isMoving, setIsMoving] = useState(false)
+  const colorRef = useRef(["#FF69B4", "#FF6B9D", "#FF69B4", "#FFB6C1"][Math.floor(Math.random() * 4)])
 
-  // Initialize with a random direction
   useEffect(() => {
-    const randomAngle = Math.random() * Math.PI * 2
-    const distance = 3 + Math.random() * 5
-    botStateRef.current.targetPosition = {
-      x: startPosition.x + Math.cos(randomAngle) * distance,
-      z: startPosition.z + Math.sin(randomAngle) * distance,
-    }
+    botStateRef.current.targetPosition = pickBotTarget(startPosition)
   }, [startPosition])
 
   useFrame(() => {
     if (!groupRef.current) return
 
     const bot = botStateRef.current
-    const speed = 0.08
-    const rotationSpeed = 0.03
+    const speed = 0.045
+    const rotationSpeed = 0.12
 
-    // Distance to target
     const dx = bot.targetPosition.x - bot.position.x
     const dz = bot.targetPosition.z - bot.position.z
-    const distance = Math.sqrt(dx * dx + dz * dz)
+    const distance = Math.hypot(dx, dz)
 
-    // If close to target, pick a new random target
-    if (distance < 0.5) {
-      bot.moveTimer++
-      if (bot.moveTimer > 120) {
-        // Every ~2 seconds, pick new target in completely random direction
-        const randomAngle = Math.random() * Math.PI * 2
-        const randomDistance = 3 + Math.random() * 5
-        bot.targetPosition = {
-          x: bot.position.x + Math.cos(randomAngle) * randomDistance,
-          z: bot.position.z + Math.sin(randomAngle) * randomDistance,
-        }
-        bot.moveTimer = 0
-      }
+    if (distance < 0.35) {
       setIsMoving(false)
-    } else {
-      // Move towards target
-      const targetAngle = Math.atan2(dz, dx)
-      
-      // Normalize rotation difference
-      let rotDiff = targetAngle - bot.targetRotation
-      if (rotDiff > Math.PI) rotDiff -= Math.PI * 2
-      if (rotDiff < -Math.PI) rotDiff += Math.PI * 2
-      
-      bot.targetRotation += rotDiff * 0.1
-      bot.rotation = THREE.MathUtils.lerp(bot.rotation, bot.targetRotation, rotationSpeed)
+      bot.idleFrames += 1
 
-      // Move forward
-      bot.position.x += Math.cos(bot.rotation) * speed
-      bot.position.z += Math.sin(bot.rotation) * speed
-      bot.moveTimer = 0
-      setIsMoving(true)
+      if (bot.idleFrames > 50 + Math.floor(Math.random() * 90)) {
+        bot.targetPosition = pickBotTarget(bot.position)
+        bot.idleFrames = 0
+      }
+
+      groupRef.current.position.x = bot.position.x
+      groupRef.current.position.z = bot.position.z
+      groupRef.current.rotation.y = bot.rotation
+      return
     }
 
-    // Clamp to island bounds
-    const islandRadius = 6
-    const distFromCenter = Math.sqrt(bot.position.x ** 2 + bot.position.z ** 2)
-    if (distFromCenter > islandRadius) {
-      const angle = Math.atan2(bot.position.z, bot.position.x)
-      bot.position.x = Math.cos(angle) * islandRadius
-      bot.position.z = Math.sin(angle) * islandRadius
+    const targetAngle = Math.atan2(dx, dz)
+    bot.rotation = THREE.MathUtils.lerpAngle(bot.rotation, targetAngle, rotationSpeed)
+
+    const step = Math.min(speed, distance)
+    bot.position.x += Math.sin(bot.rotation) * step
+    bot.position.z += Math.cos(bot.rotation) * step
+
+    const distFromCenter = Math.hypot(bot.position.x, bot.position.z)
+    if (distFromCenter > BOT_WALK_RADIUS) {
+      const clampScale = BOT_WALK_RADIUS / distFromCenter
+      bot.position.x *= clampScale
+      bot.position.z *= clampScale
+      bot.targetPosition = pickBotTarget(bot.position)
     }
 
-    // Update group transform
+    bot.idleFrames = 0
+    setIsMoving(true)
+
     groupRef.current.position.x = bot.position.x
     groupRef.current.position.z = bot.position.z
     groupRef.current.rotation.y = bot.rotation
   })
 
-  const colors = ["#FF69B4", "#FF6B9D", "#FF69B4", "#FFB6C1"]
-  const color = colors[Math.floor(Math.random() * colors.length)]
-
   return (
     <group ref={groupRef} position={[startPosition.x, 0, startPosition.z]}>
-      {/* Bot model with error boundary */}
-      <ErrorBoundaryModel fallback={<CapsuleAvatar color={color} />}>
-        <React.Suspense fallback={<CapsuleAvatar color={color} />}>
+      <ErrorBoundaryModel fallback={<CapsuleAvatar color={colorRef.current} />}>
+        <React.Suspense fallback={<CapsuleAvatar color={colorRef.current} />}>
           <GLBModel animatedUrl={modelUrl} originalUrl={modelUrl} isMoving={isMoving} />
         </React.Suspense>
       </ErrorBoundaryModel>
-
-      {/* Name label */}
-      <Html position={[0, 1.8, 0]} center>
-        <div className="bg-background/90 px-2 py-1 rounded text-xs font-semibold whitespace-nowrap text-foreground border border-border">
-          {name}
-        </div>
-      </Html>
     </group>
   )
 }
@@ -557,19 +556,15 @@ function BotCharacter() {
   const botModels = [
     {
       url: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Meshy_AI_Very_cute_girl_in_jea_biped_Animation_Running_withSkin-20UTwwBgiVuRPzwbV9R8ne6nVeyf9D.glb",
-      name: "Bot - Running",
     },
     {
       url: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Meshy_AI_T_Pose_Hoodie_Girl_biped_Animation_Walking_withSkin-W3w8uRp9B0d3AuwHYKBAQ3utQhKzVe.glb",
-      name: "Hoodie Bot",
     },
     {
       url: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Meshy_AI_Very_cute_girl_in_jea_biped_Animation_Walking_withSkin-wRv3zD9dbQut9hPXPrfuKmlXl0oVqY.glb",
-      name: "Jeans Bot",
     },
     {
       url: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Meshy_AI_t_pose_realistic_summ_biped_Animation_Walking_withSkin-RlLhvfw69OhuJf2MULEAhMVKIAohri.glb",
-      name: "Summer Bot",
     },
   ]
 
@@ -587,7 +582,6 @@ function BotCharacter() {
         <RandomWalkingBot
           key={index}
           modelUrl={bot.url}
-          name={bot.name}
           startPosition={botPositions[index % botPositions.length]}
         />
       ))}
