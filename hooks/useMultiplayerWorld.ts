@@ -13,6 +13,7 @@ const supabase = createClient()
 interface Player {
   id: string
   nickname: string
+  country: string
   model_url?: string
   animation_url?: string
   position_x: number
@@ -26,12 +27,13 @@ interface Player {
 interface ChatMessage {
   id: string
   player_id: string
+  country: string
   username: string
   message: string
   created_at: string
 }
 
-export function useMultiplayerWorld(modelUrl: string = "") {
+export function useMultiplayerWorld(modelUrl: string = "", country: string = "United States") {
   const [players, setPlayers] = useState<Player[]>([])
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [playerId, setPlayerId] = useState<string | null>(null)
@@ -47,7 +49,7 @@ export function useMultiplayerWorld(modelUrl: string = "") {
       .channel(`players-${playerId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "players" },
+        { event: "*", schema: "public", table: "players", filter: `country=eq.${encodeURIComponent(country)}` },
         (payload: any) => {
           if (payload.eventType === "DELETE") {
             setPlayers(prev => prev.filter(p => p.id !== payload.old.id))
@@ -70,7 +72,7 @@ export function useMultiplayerWorld(modelUrl: string = "") {
       .channel(`chat-${playerId}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "chat_messages" },
+        { event: "INSERT", schema: "public", table: "chat_messages", filter: `country=eq.${encodeURIComponent(country)}` },
         (payload: any) => {
           setChatMessages(prev => [...prev, payload.new])
         }
@@ -81,7 +83,7 @@ export function useMultiplayerWorld(modelUrl: string = "") {
       playersChannel.unsubscribe()
       chatChannel.unsubscribe()
     }
-  }, [playerId])
+  }, [playerId, country])
 
   // Update online count
   useEffect(() => {
@@ -89,7 +91,7 @@ export function useMultiplayerWorld(modelUrl: string = "") {
   }, [players])
 
   const joinWorld = useCallback(
-    async (nickname: string, color: string) => {
+    async (nickname: string, color: string, country: string) => {
       try {
         setError(null)
 
@@ -100,11 +102,12 @@ export function useMultiplayerWorld(modelUrl: string = "") {
           return false
         }
 
-        // Check if player with this nickname already exists
+        // Check if player for this user and country already exists
         const { data: existingPlayer } = await supabase
           .from("players")
           .select("*")
-          .eq("nickname", nickname)
+          .eq("user_id", user.id)
+          .eq("country", country)
           .maybeSingle()
 
         let playerData
@@ -116,6 +119,8 @@ export function useMultiplayerWorld(modelUrl: string = "") {
             .update({
               nickname,
               model_url: modelUrl || existingPlayer.model_url,
+              user_id: user.id,
+              country,
               position_x: Math.random() * 20 - 10,
               position_y: 0,
               position_z: Math.random() * 20 - 10,
@@ -140,6 +145,8 @@ export function useMultiplayerWorld(modelUrl: string = "") {
             .insert([
               {
                 nickname,
+                user_id: user.id,
+                country,
                 model_url: modelUrl || null,
                 position_x: Math.random() * 20 - 10,
                 position_y: 0,
@@ -162,12 +169,16 @@ export function useMultiplayerWorld(modelUrl: string = "") {
         setPlayerId(playerData.id)
         setIsConnected(true)
 
-        const { data: allPlayers } = await supabase.from("players").select("*")
+        const { data: allPlayers } = await supabase
+          .from("players")
+          .select("*")
+          .eq("country", country)
         setPlayers(allPlayers || [])
 
         const { data: recentChat } = await supabase
           .from("chat_messages")
           .select("*")
+          .eq("country", country)
           .order("created_at", { ascending: false })
           .limit(50)
 
@@ -204,7 +215,7 @@ export function useMultiplayerWorld(modelUrl: string = "") {
   )
 
   const sendMessage = useCallback(
-    async (message: string, username: string) => {
+    async (message: string, username: string, country: string) => {
       if (!playerId || !message.trim()) return
 
       try {
@@ -212,7 +223,8 @@ export function useMultiplayerWorld(modelUrl: string = "") {
           {
             player_id: playerId,
             username,
-            message
+            message,
+            country
           }
         ])
       } catch (err) {

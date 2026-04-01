@@ -197,7 +197,7 @@ function WorldPageContent() {
     updateAnimation,
     sendMessage,
     leaveWorld,
-  } = useMultiplayerWorld(modelUrl || "")
+  } = useMultiplayerWorld(modelUrl || "", selectedCountry)
 
   if (!modelUrl) {
     return (
@@ -221,7 +221,7 @@ function WorldPageContent() {
   const handleJoinWorld = async () => {
     if (!nickname.trim() || !selectedCountry) return
     setIsJoining(true)
-    const success = await joinWorld(nickname, color)
+    const success = await joinWorld(nickname, color, selectedCountry)
     if (!success) {
       setIsJoining(false)
       return
@@ -231,7 +231,7 @@ function WorldPageContent() {
 
   const handleSendMessage = async () => {
     if (!chatInput.trim()) return
-    await sendMessage(chatInput, nickname)
+    await sendMessage(chatInput, nickname, joinedCountry || selectedCountry)
     setChatInput("")
   }
 
