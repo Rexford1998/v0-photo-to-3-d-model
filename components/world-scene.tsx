@@ -410,6 +410,111 @@ function IslandEnvironment() {
   )
 }
 
+// Bot character that walks around randomly
+function BotCharacter() {
+  const groupRef = useRef<THREE.Group>(null)
+  const botStateRef = useRef({
+    position: { x: 0, z: 0 },
+    rotation: 0,
+    targetPosition: { x: 0, z: 0 },
+    targetRotation: 0,
+    moveTimer: 0,
+  })
+  const [isMoving, setIsMoving] = useState(false)
+
+  // Initialize random target position on mount
+  useEffect(() => {
+    console.log("[v0] BotCharacter mounted")
+    const getRandomPosition = () => ({
+      x: (Math.random() - 0.5) * 12,
+      z: (Math.random() - 0.5) * 12,
+    })
+    botStateRef.current.targetPosition = getRandomPosition()
+  }, [])
+
+  useFrame(() => {
+    if (!groupRef.current) return
+
+    const bot = botStateRef.current
+    const speed = 0.08
+    const rotationSpeed = 0.03
+
+    // Distance to target
+    const dx = bot.targetPosition.x - bot.position.x
+    const dz = bot.targetPosition.z - bot.position.z
+    const distance = Math.sqrt(dx * dx + dz * dz)
+
+    // If close to target, pick a new random target
+    if (distance < 0.5) {
+      bot.moveTimer++
+      if (bot.moveTimer > 120) {
+        // Every ~2 seconds, pick new target
+        const angle = Math.atan2(dz, dx)
+        const randomOffset = (Math.random() - 0.5) * Math.PI
+        const newAngle = angle + randomOffset
+        const distance = 3 + Math.random() * 5
+        bot.targetPosition = {
+          x: bot.position.x + Math.cos(newAngle) * distance,
+          z: bot.position.z + Math.sin(newAngle) * distance,
+        }
+        bot.moveTimer = 0
+      }
+      setIsMoving(false)
+    } else {
+      // Move towards target
+      const targetAngle = Math.atan2(dz, dx)
+      
+      // Normalize rotation difference
+      let rotDiff = targetAngle - bot.targetRotation
+      if (rotDiff > Math.PI) rotDiff -= Math.PI * 2
+      if (rotDiff < -Math.PI) rotDiff += Math.PI * 2
+      
+      bot.targetRotation += rotDiff * 0.1
+      bot.rotation = THREE.MathUtils.lerp(bot.rotation, bot.targetRotation, rotationSpeed)
+
+      // Move forward
+      bot.position.x += Math.cos(bot.rotation) * speed
+      bot.position.z += Math.sin(bot.rotation) * speed
+      bot.moveTimer = 0
+      setIsMoving(true)
+    }
+
+    // Clamp to island bounds
+    const islandRadius = 6
+    const distFromCenter = Math.sqrt(bot.position.x ** 2 + bot.position.z ** 2)
+    if (distFromCenter > islandRadius) {
+      const angle = Math.atan2(bot.position.z, bot.position.x)
+      bot.position.x = Math.cos(angle) * islandRadius
+      bot.position.z = Math.sin(angle) * islandRadius
+    }
+
+    // Update group transform
+    groupRef.current.position.x = bot.position.x
+    groupRef.current.position.z = bot.position.z
+    groupRef.current.rotation.y = bot.rotation
+  })
+
+  const botModelUrl = "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Meshy_AI_Very_cute_girl_in_jea_biped_Animation_Running_withSkin-20UTwwBgiVuRPzwbV9R8ne6nVeyf9D.glb"
+
+  return (
+    <group ref={groupRef} position={[0, 0, 0]}>
+      {/* Bot model with error boundary */}
+      <ErrorBoundaryModel fallback={<CapsuleAvatar color="#FF69B4" />}>
+        <React.Suspense fallback={<CapsuleAvatar color="#FF69B4" />}>
+          <GLBModel animatedUrl={botModelUrl} originalUrl={botModelUrl} isMoving={isMoving} />
+        </React.Suspense>
+      </ErrorBoundaryModel>
+
+      {/* Name label */}
+      <Html position={[0, 1.8, 0]} center>
+        <div className="bg-background/90 px-2 py-1 rounded text-xs font-semibold whitespace-nowrap text-foreground border border-border">
+          Meshy Bot
+        </div>
+      </Html>
+    </group>
+  )
+}
+
 // Main scene
 function Scene({ players, localPlayerId, modelUrl, originalModelUrl, onPositionChange }: { players: Player[]; localPlayerId: string | null; modelUrl: string; originalModelUrl: string; onPositionChange: (x: number, z: number, rotation: number) => void }) {
   const cameraRef = useRef<THREE.PerspectiveCamera>(null)
@@ -523,6 +628,9 @@ function Scene({ players, localPlayerId, modelUrl, originalModelUrl, onPositionC
 
       {/* Tropical island environment */}
       <IslandEnvironment />
+
+      {/* Bot character */}
+      <BotCharacter />
 
       {/* Players */}
       {players.map((player) => (
