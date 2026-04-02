@@ -334,6 +334,9 @@ function WorldPageContent() {
     isMicMuted,
     voiceError,
     connectedPeerCount,
+    localAudioLevel,
+    isLocalSpeaking,
+    speakingPeerIds,
     toggleVoice,
     toggleMicMute,
   } = useVoiceChat({
@@ -557,6 +560,42 @@ function WorldPageContent() {
                 </div>
               </div>
 
+              <div className="rounded-lg border border-border bg-background/70 p-3 space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium text-foreground">Mic Activity</span>
+                  <span className={isLocalSpeaking ? "text-emerald-600" : "text-muted-foreground"}>
+                    {isMicMuted ? "Muted" : isLocalSpeaking ? "Speaking" : "Listening"}
+                  </span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-secondary">
+                  <div
+                    className={`h-full rounded-full transition-all ${isMicMuted ? "bg-muted-foreground/40" : isLocalSpeaking ? "bg-emerald-500" : "bg-primary/60"}`}
+                    style={{ width: `${Math.max(6, Math.min(100, Math.round(localAudioLevel * 220)))}%` }}
+                  />
+                </div>
+                {connectedPeerCount > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {players
+                      .filter((player) => player.id !== playerId)
+                      .map((player) => {
+                        const isPeerConnected = speakingPeerIds.includes(player.id)
+                        return (
+                          <div
+                            key={player.id}
+                            className={`rounded-full border px-2 py-1 text-[11px] transition-colors ${
+                              isPeerConnected
+                                ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-700"
+                                : "border-border bg-secondary text-muted-foreground"
+                            }`}
+                          >
+                            {player.nickname} {isPeerConnected ? "speaking" : "quiet"}
+                          </div>
+                        )
+                      })}
+                  </div>
+                )}
+              </div>
+
               <div className="flex gap-2">
                 <Button type="button" size="sm" onClick={toggleVoice} className="flex-1">
                   {isVoiceEnabled ? <PhoneOff className="mr-2 h-4 w-4" /> : <Phone className="mr-2 h-4 w-4" />}
@@ -765,14 +804,14 @@ function WorldPageContent() {
       </div>
 
       {isMobile && (
-        <div className="fixed bottom-3 left-3 right-3 z-20 flex items-center justify-between gap-3 md:hidden">
-          <div className="rounded-full bg-background/90 px-4 py-2 text-xs text-muted-foreground shadow-lg backdrop-blur">
+        <div className="pointer-events-none fixed bottom-3 left-3 right-3 z-20 flex items-center justify-between gap-3 md:hidden">
+          <div className="pointer-events-auto rounded-full bg-background/90 px-4 py-2 text-xs text-muted-foreground shadow-lg backdrop-blur">
             Tap left side to move. Drag right side to look.
           </div>
           <Button
             type="button"
             size="sm"
-            className="rounded-full shadow-lg"
+            className="pointer-events-auto rounded-full shadow-lg"
             onClick={() => setMobileControlsOpen((open) => !open)}
           >
             <SlidersHorizontal className="mr-2 h-4 w-4" />

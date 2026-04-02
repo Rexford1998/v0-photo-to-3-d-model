@@ -56,13 +56,116 @@ export function useVoiceChat({
   const [isMicMuted, setIsMicMuted] = useState(false)
   const [voiceError, setVoiceError] = useState<string | null>(null)
   const [connectedPeerIds, setConnectedPeerIds] = useState<string[]>([])
+  const [localAudioLevel, setLocalAudioLevel] = useState(0)
+  const [speakingPeerIds, setSpeakingPeerIds] = useState<string[]>([])
 
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
   const localStreamRef = useRef<MediaStream | null>(null)
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map())
   const pendingIceCandidatesRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map())
   const remoteAudioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map())
+  const remoteStreamsRef = useRef<Map<string, MediaStream>>(new Map())
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const analyserCleanupRef = useRef<(() => void) | null>(null)
   const subscribedRef = useRef(false)
+
+  const ensureAudioContext = useCallback(() => {
+    if (typeof window === "undefined") return null
+
+    const AudioContextCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!AudioContextCtor) return null
+
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioContextCtor()
+    }
+
+    if (audioContextRef.current.state === "suspended") {
+      audioContextRef.current.resume().catch(() => {
+        // ignore resume failures caused by browser autoplay policies
+      })
+    }
+
+    return audioContextRef.current
+  }, [])
+
+  const cleanupAnalyser = useCallback(() => {
+    analyserCleanupRef.current?.()
+    analyserCleanupRef.current = null
+    setLocalAudioLevel(0)
+    setSpeakingPeerIds([])
+  }, [])
+
+  const startAudioMeters = useCallback(() => {
+    cleanupAnalyser()
+
+    let frameId = 0
+    let cancelled = false
+
+    const context = ensureAudioContext()
+    const localStream = localStreamRef.current
+
+    if (!context || !localStream) {
+      return
+    }
+
+    const localAnalyser = context.createAnalyser()
+    localAnalyser.fftSize = 512
+    localAnalyser.smoothingTimeConstant = 0.75
+    const localSource = context.createMediaStreamSource(localStream)
+    localSource.connect(localAnalyser)
+    const localBuffer = new Uint8Array(localAnalyser.frequencyBinCount)
+
+    const remoteAnalysers = new Map<string, { analyser: AnalyserNode; buffer: Uint8Array; source: MediaStreamAudioSourceNode }>()
+
+    remoteStreamsRef.current.forEach((stream, peerId) => {
+      const analyser = context.createAnalyser()
+      analyser.fftSize = 512
+      analyser.smoothingTimeConstant = 0.8
+      const source = context.createMediaStreamSource(stream)
+      source.connect(analyser)
+      remoteAnalysers.set(peerId, {
+        analyser,
+        buffer: new Uint8Array(analyser.frequencyBinCount),
+        source,
+      })
+    })
+
+    const sampleLevel = (buffer: Uint8Array) => {
+      let total = 0
+      for (let i = 0; i < buffer.length; i++) {
+        total += buffer[i]
+      }
+      return total / buffer.length / 255
+    }
+
+    const tick = () => {
+      if (cancelled) return
+
+      localAnalyser.getByteFrequencyData(localBuffer)
+      const nextLocalLevel = sampleLevel(localBuffer)
+      setLocalAudioLevel(nextLocalLevel)
+
+      const nextSpeakingPeerIds: string[] = []
+      remoteAnalysers.forEach(({ analyser, buffer }, peerId) => {
+        analyser.getByteFrequencyData(buffer)
+        if (sampleLevel(buffer) > 0.08) {
+          nextSpeakingPeerIds.push(peerId)
+        }
+      })
+      setSpeakingPeerIds(nextSpeakingPeerIds)
+
+      frameId = window.requestAnimationFrame(tick)
+    }
+
+    frameId = window.requestAnimationFrame(tick)
+
+    analyserCleanupRef.current = () => {
+      cancelled = true
+      window.cancelAnimationFrame(frameId)
+      localSource.disconnect()
+      remoteAnalysers.forEach(({ source }) => source.disconnect())
+    }
+  }, [cleanupAnalyser, ensureAudioContext])
 
   const sendSignal = useCallback(async (payload: VoiceSignalPayload) => {
     const channel = channelRef.current
@@ -103,10 +206,13 @@ export function useVoiceChat({
         remoteAudioElementsRef.current.delete(peerId)
       }
 
+      remoteStreamsRef.current.delete(peerId)
+
       pendingIceCandidatesRef.current.delete(peerId)
       updateConnectedPeers()
+      startAudioMeters()
     },
-    [updateConnectedPeers]
+    [startAudioMeters, updateConnectedPeers]
   )
 
   const ensurePeerConnection = useCallback(
@@ -136,9 +242,16 @@ export function useVoiceChat({
         if (!audio) {
           audio = new Audio()
           audio.autoplay = true
+          audio.playsInline = true
+          audio.crossOrigin = "anonymous"
           remoteAudioElementsRef.current.set(peerId, audio)
         }
         audio.srcObject = event.streams[0]
+        remoteStreamsRef.current.set(peerId, event.streams[0])
+        audio.play().catch((error) => {
+          console.warn("[voice] Remote audio playback was blocked:", error)
+        })
+        startAudioMeters()
       }
 
       connection.onconnectionstatechange = () => {
@@ -164,7 +277,7 @@ export function useVoiceChat({
       peerConnectionsRef.current.set(peerId, connection)
       return connection
     },
-    [cleanupPeer, localPlayerId, sendSignal, updateConnectedPeers]
+    [cleanupPeer, localPlayerId, sendSignal, startAudioMeters, updateConnectedPeers]
   )
 
   const flushPendingIceCandidates = useCallback(async (peerId: string) => {
@@ -223,11 +336,13 @@ export function useVoiceChat({
 
     localStreamRef.current?.getTracks().forEach((track) => track.stop())
     localStreamRef.current = null
+    remoteStreamsRef.current.clear()
+    cleanupAnalyser()
 
     setConnectedPeerIds([])
     setIsVoiceEnabled(false)
     setIsMicMuted(false)
-  }, [cleanupPeer, localPlayerId, sendSignal])
+  }, [cleanupAnalyser, cleanupPeer, localPlayerId, sendSignal])
 
   const enableVoice = useCallback(async () => {
     if (!localPlayerId) {
@@ -244,9 +359,13 @@ export function useVoiceChat({
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true,
+            channelCount: 1,
           },
         })
       }
+
+      ensureAudioContext()
+      startAudioMeters()
 
       const channel = supabase
         .channel(`voice-${country}`)
@@ -323,7 +442,7 @@ export function useVoiceChat({
       setVoiceError(error instanceof Error ? error.message : "Microphone permission was denied.")
       await disableVoice()
     }
-  }, [cleanupPeer, country, disableVoice, ensurePeerConnection, flushPendingIceCandidates, localPlayerId, sendSignal])
+  }, [cleanupPeer, country, disableVoice, ensureAudioContext, ensurePeerConnection, flushPendingIceCandidates, localPlayerId, sendSignal, startAudioMeters])
 
   const toggleVoice = useCallback(async () => {
     if (isVoiceEnabled) {
@@ -379,6 +498,9 @@ export function useVoiceChat({
     isMicMuted,
     voiceError,
     connectedPeerCount: connectedPeerIds.length,
+    localAudioLevel,
+    isLocalSpeaking: !isMicMuted && localAudioLevel > 0.08,
+    speakingPeerIds,
     toggleVoice,
     toggleMicMute,
   }
