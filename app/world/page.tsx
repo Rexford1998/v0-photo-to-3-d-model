@@ -2,9 +2,9 @@
 
 // Multiplayer world - 3D environment with player sync and chat
 import { useSearchParams, useRouter } from "next/navigation"
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import Link from "next/link"
-import { ArrowLeft, Send, Users, LogOut, Play, ChevronDown, ChevronUp, RotateCcw } from "lucide-react"
+import { ArrowLeft, Send, Users, LogOut, Play, ChevronDown, ChevronUp, RotateCcw, Radio, Pause, Volume2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -34,6 +34,27 @@ const ANIMATION_LIBRARY = [
   { id: 412, name: "Victory", category: "BodyMovements" },
   { id: 452, name: "Backflip", category: "BodyMovements" },
 ]
+
+const RADIO_STATIONS = [
+  {
+    id: "groove-salad",
+    name: "Groove Salad",
+    description: "Downtempo and chillout",
+    streamUrl: "https://ice.somafm.com/groovesalad",
+  },
+  {
+    id: "secret-agent",
+    name: "Secret Agent",
+    description: "Stylish lounge and spy grooves",
+    streamUrl: "https://ice.somafm.com/secretagent",
+  },
+  {
+    id: "drone-zone",
+    name: "Drone Zone",
+    description: "Ambient textures and spacey calm",
+    streamUrl: "https://ice.somafm.com/dronezone",
+  },
+] as const
 
 interface GeneratedAnimation {
   id: number
@@ -77,10 +98,16 @@ function WorldPageContent() {
   const [generatedAnimations, setGeneratedAnimations] = useState<GeneratedAnimation[]>([])
   const [animationPanelOpen, setAnimationPanelOpen] = useState(false)
   const [chatPanelOpen, setChatPanelOpen] = useState(false)
+  const [radioPanelOpen, setRadioPanelOpen] = useState(false)
   const [activeAnimationUrl, setActiveAnimationUrl] = useState<string | null>(null)
   const [availableAnimations, setAvailableAnimations] = useState<string[]>([])
   const [currentAnimation, setCurrentAnimation] = useState("")
   const [isMobile, setIsMobile] = useState(false)
+  const [selectedStationId, setSelectedStationId] = useState(RADIO_STATIONS[0].id)
+  const [isRadioPlaying, setIsRadioPlaying] = useState(false)
+  const [radioVolume, setRadioVolume] = useState(65)
+  const [radioError, setRadioError] = useState<string | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(max-width: 768px)")
@@ -88,6 +115,7 @@ function WorldPageContent() {
       setIsMobile(mediaQuery.matches)
       if (!mediaQuery.matches) {
         setChatPanelOpen(true)
+        setRadioPanelOpen(true)
       }
     }
 
@@ -95,6 +123,84 @@ function WorldPageContent() {
     mediaQuery.addEventListener("change", updateIsMobile)
     return () => mediaQuery.removeEventListener("change", updateIsMobile)
   }, [])
+
+  useEffect(() => {
+    if (!audioRef.current) {
+      audioRef.current = new Audio()
+      audioRef.current.preload = "none"
+      audioRef.current.crossOrigin = "anonymous"
+    }
+
+    const audio = audioRef.current
+    audio.volume = radioVolume / 100
+
+    const handleEnded = () => setIsRadioPlaying(false)
+    const handlePause = () => setIsRadioPlaying(false)
+    const handlePlay = () => setIsRadioPlaying(true)
+    const handleError = () => {
+      setIsRadioPlaying(false)
+      setRadioError("This station could not be played right now. Try another one.")
+    }
+
+    audio.addEventListener("ended", handleEnded)
+    audio.addEventListener("pause", handlePause)
+    audio.addEventListener("play", handlePlay)
+    audio.addEventListener("error", handleError)
+
+    return () => {
+      audio.pause()
+      audio.removeEventListener("ended", handleEnded)
+      audio.removeEventListener("pause", handlePause)
+      audio.removeEventListener("play", handlePlay)
+      audio.removeEventListener("error", handleError)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!audioRef.current) return
+    audioRef.current.volume = radioVolume / 100
+  }, [radioVolume])
+
+  const selectedStation = RADIO_STATIONS.find((station) => station.id === selectedStationId) || RADIO_STATIONS[0]
+
+  const handleStationChange = async (stationId: string) => {
+    setSelectedStationId(stationId)
+    setRadioError(null)
+
+    if (!audioRef.current || !isRadioPlaying) return
+
+    const station = RADIO_STATIONS.find((item) => item.id === stationId)
+    if (!station) return
+
+    audioRef.current.src = station.streamUrl
+    try {
+      await audioRef.current.play()
+    } catch (error) {
+      console.error("Failed to switch radio station:", error)
+      setIsRadioPlaying(false)
+      setRadioError("Tap play to start the new station.")
+    }
+  }
+
+  const toggleRadioPlayback = async () => {
+    if (!audioRef.current) return
+
+    if (isRadioPlaying) {
+      audioRef.current.pause()
+      return
+    }
+
+    setRadioError(null)
+    audioRef.current.src = selectedStation.streamUrl
+
+    try {
+      await audioRef.current.play()
+    } catch (error) {
+      console.error("Failed to start radio playback:", error)
+      setIsRadioPlaying(false)
+      setRadioError("Playback was blocked. Tap play again after interacting with the page.")
+    }
+  }
 
   useEffect(() => {
     const loadCountries = async () => {
@@ -394,6 +500,66 @@ function WorldPageContent() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          )}
+        </div>
+
+        <div className="border-b border-border">
+          <button
+            onClick={() => setRadioPanelOpen((open) => !open)}
+            className="w-full p-4 flex items-center justify-between text-sm font-medium hover:bg-secondary/50 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <Radio className="h-4 w-4" />
+              World Radio
+            </div>
+            {radioPanelOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+
+          {radioPanelOpen && (
+            <div className="px-4 pb-4 space-y-3">
+              <Select value={selectedStationId} onValueChange={handleStationChange}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Choose a station" />
+                </SelectTrigger>
+                <SelectContent>
+                  {RADIO_STATIONS.map((station) => (
+                    <SelectItem key={station.id} value={station.id}>
+                      {station.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <div className="rounded-lg bg-secondary p-3 text-xs text-muted-foreground">
+                <div className="font-medium text-foreground">{selectedStation.name}</div>
+                <div>{selectedStation.description}</div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Button type="button" size="sm" onClick={toggleRadioPlayback} className="min-w-24">
+                  {isRadioPlaying ? <Pause className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
+                  {isRadioPlaying ? "Pause" : "Play"}
+                </Button>
+
+                <div className="flex items-center gap-2 flex-1">
+                  <Volume2 className="h-4 w-4 text-muted-foreground" />
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={radioVolume}
+                    onChange={(event) => setRadioVolume(Number(event.target.value))}
+                    className="w-full"
+                  />
+                </div>
+              </div>
+
+              {radioError && (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700">
+                  {radioError}
+                </div>
+              )}
             </div>
           )}
         </div>
