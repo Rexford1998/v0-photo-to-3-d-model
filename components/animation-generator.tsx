@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Check, Loader2, Play, ChevronDown, ChevronUp } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { uploadModelUrlToStorage } from "@/lib/model-storage"
 
 // Animation library from Meshy API
 const ANIMATION_LIBRARY = [
@@ -106,12 +107,19 @@ export function AnimationGenerator({ rigTaskId, userId }: AnimationGeneratorProp
 
           if (status.status === "SUCCEEDED" && status.modelUrl) {
             completed = true
+            const supabase = createClient()
+            const storedAnimation = await uploadModelUrlToStorage({
+              sourceUrl: status.modelUrl,
+              supabase,
+              userId,
+              fileNameBase: `animation-${anim.name}`,
+            })
 
             // Add to generated animations
             const newAnim: GeneratedAnimation = {
               id: animId,
               name: anim.name,
-              modelUrl: status.modelUrl,
+              modelUrl: storedAnimation.publicUrl,
             }
             setGeneratedAnimations((prev) => [
               ...prev.filter((a) => a.id !== animId),
@@ -119,13 +127,12 @@ export function AnimationGenerator({ rigTaskId, userId }: AnimationGeneratorProp
             ])
 
             // Save to database
-            const supabase = createClient()
             await supabase.from("player_animations").upsert(
               {
                 user_id: userId,
                 animation_id: animId,
                 animation_name: anim.name,
-                animation_url: status.modelUrl,
+                animation_url: storedAnimation.publicUrl,
               },
               { onConflict: "user_id,animation_id" }
             )

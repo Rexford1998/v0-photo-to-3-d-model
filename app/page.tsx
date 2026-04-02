@@ -1,7 +1,7 @@
 "use client"
 
 // Main Page - Build: 2026-03-25-v5
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import dynamic from "next/dynamic"
 import { ImageUpload } from "@/components/image-upload"
 import { ModelUpload } from "@/components/model-upload"
@@ -14,6 +14,7 @@ import { Sparkles, RotateCcw, Zap, Package, Play, Gamepad2, LogIn, UserPlus, Log
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
 import type { User as SupabaseUser } from "@supabase/supabase-js"
+import { getSavableModelUrl, uploadModelUrlToStorage } from "@/lib/model-storage"
 
 const ModelViewer = dynamic(
   () => import("@/components/model-viewer").then((mod) => mod.ModelViewer),
@@ -36,21 +37,13 @@ const STEPS = [
   { id: "complete", label: "Ready", description: "View your model" },
 ]
 
-function getSavableModelUrl(url: string): string | null {
-  if (!url || url.startsWith("blob:")) return null
-  if (url.startsWith("/api/proxy-model?url=")) return url
-  if (url.startsWith("http://") || url.startsWith("https://")) {
-    return `/api/proxy-model?url=${encodeURIComponent(url)}`
-  }
-  return url
-}
-
 export default function Home() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [uploadedPreviewUrl, setUploadedPreviewUrl] = useState<string | null>(null)
   const [uploadedModelUrl, setUploadedModelUrl] = useState<string | null>(null)
   const [user, setUser] = useState<SupabaseUser | null>(null)
   const [savedModelUrl, setSavedModelUrl] = useState<string | null>(null)
+  const [savedAnimationUrl, setSavedAnimationUrl] = useState<string | null>(null)
   const [isLoadingUser, setIsLoadingUser] = useState(true)
   const [isUploadingModel, setIsUploadingModel] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
@@ -59,6 +52,7 @@ export default function Home() {
   const [uploadedAnimationUrl, setUploadedAnimationUrl] = useState<string | null>(null)
   const [showRigGuideEditor, setShowRigGuideEditor] = useState(false)
   const [rigGuidePoints, setRigGuidePoints] = useState<RigGuidePoints>({})
+  const lastGeneratedSyncKeyRef = useRef<string | null>(null)
   
   const {
     stage,
@@ -72,6 +66,66 @@ export default function Home() {
     reset,
   } = useMeshy()
 
+  const loadSavedPlayerAssets = async (currentUser: SupabaseUser | null) => {
+    if (!currentUser) {
+      setSavedModelUrl(null)
+      setSavedAnimationUrl(null)
+      return
+    }
+
+    const supabase = createClient()
+    const nickname = currentUser.email?.split("@")[0] || "Player"
+    const { data: playerData } = await supabase
+      .from("players")
+      .select("model_url, animation_url")
+      .eq("user_id", currentUser.id)
+      .maybeSingle()
+
+    if (playerData) {
+      setSavedModelUrl(getSavableModelUrl(playerData.model_url || "") || playerData.model_url || null)
+      setSavedAnimationUrl(getSavableModelUrl(playerData.animation_url || "") || playerData.animation_url || null)
+      return
+    }
+
+    const { data: legacyPlayerData } = await supabase
+      .from("players")
+      .select("model_url, animation_url")
+      .eq("nickname", nickname)
+      .maybeSingle()
+
+    setSavedModelUrl(getSavableModelUrl(legacyPlayerData?.model_url || "") || legacyPlayerData?.model_url || null)
+    setSavedAnimationUrl(getSavableModelUrl(legacyPlayerData?.animation_url || "") || legacyPlayerData?.animation_url || null)
+  }
+
+  const findExistingPlayerRecord = async (supabase: ReturnType<typeof createClient>, currentUser: SupabaseUser) => {
+    const nickname = currentUser.email?.split("@")[0] || "Player"
+    const { data: playerByUserId, error: playerByUserIdError } = await supabase
+      .from("players")
+      .select("id")
+      .eq("user_id", currentUser.id)
+      .maybeSingle()
+
+    if (playerByUserIdError) {
+      throw new Error(`Could not verify existing character record: ${playerByUserIdError.message}`)
+    }
+
+    if (playerByUserId) {
+      return playerByUserId
+    }
+
+    const { data: legacyPlayer, error: legacyPlayerError } = await supabase
+      .from("players")
+      .select("id")
+      .eq("nickname", nickname)
+      .maybeSingle()
+
+    if (legacyPlayerError) {
+      throw new Error(`Could not verify existing character record: ${legacyPlayerError.message}`)
+    }
+
+    return legacyPlayer
+  }
+
   // Check for logged in user and load their saved model
   useEffect(() => {
     const supabase = createClient()
@@ -79,19 +133,7 @@ export default function Home() {
     const checkUser = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       setUser(user)
-      
-      if (user) {
-        // Load user's saved player/model
-        const { data: playerData } = await supabase
-          .from('players')
-          .select('model_url')
-          .eq('nickname', user.email?.split("@")[0] || "Player")
-          .single()
-        
-        if (playerData?.model_url) {
-          setSavedModelUrl(playerData.model_url)
-        }
-      }
+      await loadSavedPlayerAssets(user)
       setIsLoadingUser(false)
     }
     
@@ -102,74 +144,104 @@ export default function Home() {
       setUser(session?.user || null)
       if (!session?.user) {
         setSavedModelUrl(null)
+        setSavedAnimationUrl(null)
+        lastGeneratedSyncKeyRef.current = null
+      } else {
+        await loadSavedPlayerAssets(session.user)
       }
     })
     
     return () => subscription.unsubscribe()
   }, [])
 
-  // Save model to user's account when generated
+  // Save generated model and walking animation to storage for multiplayer.
   useEffect(() => {
     const saveModel = async () => {
       if (stage === "complete" && modelUrl && user) {
+        const syncKey = [user.id, modelUrl, animationUrl || "", rigTaskId || ""].join("|")
+        if (lastGeneratedSyncKeyRef.current === syncKey) {
+          return
+        }
+
         setSaveError(null)
+        setUploadError(null)
+        setIsUploadingModel(true)
         const supabase = createClient()
+        const nickname = user.email?.split("@")[0] || "Player"
 
-        const payload = {
-          nickname: user.email?.split("@")[0] || "Player",
-          model_url: modelUrl,
-          rig_task_id: rigTaskId,
-          updated_at: new Date().toISOString(),
-        }
-        if (!payload.model_url) {
-          setSaveError("Failed to save character: model URL is temporary. Please regenerate or re-upload the model.")
-          return
-        }
+        try {
+          const storedModel = await uploadModelUrlToStorage({
+            sourceUrl: modelUrl,
+            supabase,
+            userId: user.id,
+            fileNameBase: "generated-model",
+          })
 
-        const { data: existingPlayer, error: existingPlayerError } = await supabase
-          .from("players")
-          .select("id")
-          .eq("nickname", payload.nickname)
-          .maybeSingle()
+          const storedAnimation = animationUrl
+            ? await uploadModelUrlToStorage({
+                sourceUrl: animationUrl,
+                supabase,
+                userId: user.id,
+                fileNameBase: "generated-walking-animation",
+              })
+            : null
 
-        if (existingPlayerError) {
-          setSaveError(`Could not verify existing character record: ${existingPlayerError.message}`)
-          return
-        }
-
-        if (existingPlayer) {
-          const { error: updateError } = await supabase
-            .from("players")
-            .update(payload)
-            .eq("id", existingPlayer.id)
-
-          if (updateError) {
-            setSaveError(`Failed to save character: ${updateError.message}`)
-            return
+          const payload = {
+            nickname,
+            user_id: user.id,
+            model_url: storedModel.publicUrl,
+            animation_url: storedAnimation?.publicUrl || null,
+            rig_task_id: rigTaskId,
+            updated_at: new Date().toISOString(),
           }
-        } else {
-          const { error: insertError } = await supabase
-            .from("players")
-            .insert(payload)
 
-          if (insertError) {
-            setSaveError(`Failed to save character: ${insertError.message}`)
-            return
+          const existingPlayer = await findExistingPlayerRecord(supabase, user)
+
+          if (existingPlayer) {
+            const { error: updateError } = await supabase
+              .from("players")
+              .update(payload)
+              .eq("id", existingPlayer.id)
+
+            if (updateError) {
+              setSaveError(`Failed to save character: ${updateError.message}`)
+              return
+            }
+          } else {
+            const { error: insertError } = await supabase
+              .from("players")
+              .insert(payload)
+
+            if (insertError) {
+              setSaveError(`Failed to save character: ${insertError.message}`)
+              return
+            }
           }
-        }
 
-        setSavedModelUrl(modelUrl)
+          lastGeneratedSyncKeyRef.current = syncKey
+          setSavedModelUrl(storedModel.savableUrl)
+          setSavedAnimationUrl(storedAnimation?.savableUrl || null)
+        } catch (storageError) {
+          console.error("[v0] Generated model storage sync failed:", storageError)
+          const message = storageError instanceof Error ? storageError.message : "Failed to save generated model to storage"
+          setUploadError(message)
+          setSaveError(message)
+        } finally {
+          setIsUploadingModel(false)
+        }
       }
     }
     
     saveModel()
-  }, [stage, modelUrl, rigTaskId, user])
+  }, [stage, modelUrl, animationUrl, rigTaskId, user])
 
   const handleLogout = async () => {
     const supabase = createClient()
     await supabase.auth.signOut()
     setUser(null)
     setSavedModelUrl(null)
+    setSavedAnimationUrl(null)
+    lastGeneratedSyncKeyRef.current = null
   }
 
   const handleImageSelect = (dataUrl: string) => {
@@ -193,6 +265,7 @@ export default function Home() {
     setSaveError(null)
     setShowRigGuideEditor(false)
     setRigGuidePoints({})
+    lastGeneratedSyncKeyRef.current = null
     reset()
   }
 
@@ -243,16 +316,7 @@ export default function Home() {
 
       if (user) {
         const supabase = createClient()
-        const nickname = user.email?.split("@")[0] || "Player"
-        const { data: existingPlayer, error: existingPlayerError } = await supabase
-          .from("players")
-          .select("id")
-          .eq("nickname", nickname)
-          .maybeSingle()
-
-        if (existingPlayerError) {
-          throw new Error(`Could not verify saved character for rigging: ${existingPlayerError.message}`)
-        }
+        const existingPlayer = await findExistingPlayerRecord(supabase, user)
 
         if (existingPlayer) {
           const { error: updateError } = await supabase
@@ -342,19 +406,12 @@ export default function Home() {
 
       const payload = {
         nickname: user.email?.split("@")[0] || "Player",
+        user_id: user.id,
         model_url: publicUrl,
         updated_at: new Date().toISOString(),
       }
 
-      const { data: existingPlayer, error: existingPlayerError } = await supabase
-        .from("players")
-        .select("id")
-        .eq("nickname", payload.nickname)
-        .maybeSingle()
-
-      if (existingPlayerError) {
-        throw new Error(`Could not verify saved character: ${existingPlayerError.message}`)
-      }
+      const existingPlayer = await findExistingPlayerRecord(supabase, user)
 
       if (existingPlayer) {
         const { error: updateError } = await supabase
@@ -376,6 +433,7 @@ export default function Home() {
       }
 
       setSavedModelUrl(payload.model_url)
+      setSavedAnimationUrl(null)
 
       await startRiggingForUploadedModel(publicUrl)
     } catch (uploadErr) {
@@ -393,7 +451,12 @@ export default function Home() {
   const displayModelUrl = uploadedPreviewUrl || uploadedModelUrl || modelUrl
   const displayAnimationUrl = uploadedModelUrl ? uploadedAnimationUrl : animationUrl
   const displayRigTaskId = uploadedModelUrl ? uploadedRigTaskId : rigTaskId
-  const multiplayerModelUrl = uploadedModelUrl || modelUrl
+  const multiplayerModelUrl =
+    uploadedAnimationUrl ||
+    uploadedModelUrl ||
+    savedAnimationUrl ||
+    savedModelUrl ||
+    getSavableModelUrl(modelUrl || "")
 
   const renderMultiplayerCta = () => {
     if (!multiplayerModelUrl) return null
@@ -401,15 +464,15 @@ export default function Home() {
     if (user) {
       return (
         <div className="flex flex-col items-center gap-4 mt-6">
-          {uploadedPreviewUrl && !uploadedModelUrl && isUploadingModel && (
+          {isUploadingModel && (
             <p className="text-sm text-muted-foreground">Uploading model to storage before multiplayer...</p>
           )}
-          {uploadedModelUrl && !isUploadingModel && <p className="text-sm text-green-600">Model saved to your account!</p>}
+          {multiplayerModelUrl && !isUploadingModel && <p className="text-sm text-green-600">Model saved to your account!</p>}
           <Link href={`/world?modelUrl=${encodeURIComponent(multiplayerModelUrl)}`}>
             <Button
               size="lg"
               className="h-12 px-8 text-base font-semibold bg-green-600 hover:bg-green-700"
-              disabled={Boolean(uploadedPreviewUrl && !uploadedModelUrl)}
+              disabled={isUploadingModel || Boolean(uploadedPreviewUrl && !uploadedModelUrl)}
             >
               <Gamepad2 className="mr-2 h-5 w-5" />
               Join Multiplayer World
@@ -461,8 +524,8 @@ export default function Home() {
                   <User className="h-4 w-4" />
                   <span>{user.email}</span>
                 </div>
-                {savedModelUrl && (
-                  <Link href={`/world?modelUrl=${encodeURIComponent(savedModelUrl)}`}>
+                {(savedAnimationUrl || savedModelUrl) && (
+                  <Link href={`/world?modelUrl=${encodeURIComponent(savedAnimationUrl || savedModelUrl || "")}`}>
                     <Button size="sm" className="bg-green-600 hover:bg-green-700">
                       <Gamepad2 className="mr-2 h-4 w-4" />
                       Enter Multiplayer

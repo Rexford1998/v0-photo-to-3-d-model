@@ -51,7 +51,8 @@ import { Suspense } from "react"
 function WorldPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const modelUrl = searchParams.get("modelUrl")
+  const rawModelUrl = searchParams.get("modelUrl")
+  const modelUrl = rawModelUrl && !rawModelUrl.startsWith("blob:") ? rawModelUrl : null
   const [nickname, setNickname] = useState("")
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [selectedCountry, setSelectedCountry] = useState("United States")
@@ -205,7 +206,7 @@ function WorldPageContent() {
         <div className="max-w-md text-center">
           <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
           <p className="text-muted-foreground mb-6">
-            Please generate a 3D avatar first to access the multiplayer world.
+            Please generate or upload a saved 3D avatar first to access the multiplayer world.
           </p>
           <Link href="/">
             <Button className="gap-2">
