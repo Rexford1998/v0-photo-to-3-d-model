@@ -58,6 +58,15 @@ export function useMultiplayerWorld(modelUrl: string = "", country: string = "Un
   const [error, setError] = useState<string | null>(null)
   const [onlineCount, setOnlineCount] = useState(0)
 
+  const appendChatMessage = useCallback((message: ChatMessage) => {
+    setChatMessages((prev) => {
+      if (prev.some((existing) => existing.id === message.id)) {
+        return prev
+      }
+      return [...prev, message]
+    })
+  }, [])
+
   // Subscribe to realtime player updates
   useEffect(() => {
     if (!playerId) return
@@ -66,7 +75,7 @@ export function useMultiplayerWorld(modelUrl: string = "", country: string = "Un
       .channel(`players-${playerId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "players", filter: `country=eq.${encodeURIComponent(country)}` },
+        { event: "*", schema: "public", table: "players", filter: `country=eq.${country}` },
         (payload: any) => {
           if (payload.eventType === "DELETE") {
             setPlayers(prev => prev.filter(p => p.id !== payload.old.id))
@@ -89,9 +98,9 @@ export function useMultiplayerWorld(modelUrl: string = "", country: string = "Un
       .channel(`chat-${playerId}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "chat_messages", filter: `country=eq.${encodeURIComponent(country)}` },
+        { event: "INSERT", schema: "public", table: "chat_messages", filter: `country=eq.${country}` },
         (payload: any) => {
-          setChatMessages(prev => [...prev, payload.new])
+          appendChatMessage(payload.new)
         }
       )
       .subscribe()
@@ -100,7 +109,7 @@ export function useMultiplayerWorld(modelUrl: string = "", country: string = "Un
       playersChannel.unsubscribe()
       chatChannel.unsubscribe()
     }
-  }, [playerId, country])
+  }, [appendChatMessage, playerId, country])
 
   // Update online count
   useEffect(() => {
@@ -246,19 +255,27 @@ export function useMultiplayerWorld(modelUrl: string = "", country: string = "Un
 
         await cleanupExpiredChatMessages(country, chatRetentionCutoff)
 
-        await supabase.from("chat_messages").insert([
+        const { data, error } = await supabase.from("chat_messages").insert([
           {
             player_id: playerId,
             username,
             message,
             country
           }
-        ])
+        ]).select().single()
+
+        if (error) {
+          throw error
+        }
+
+        if (data) {
+          appendChatMessage(data)
+        }
       } catch (err) {
         console.error("[v0] Send message error:", err)
       }
     },
-    [playerId]
+    [appendChatMessage, playerId]
   )
 
   const updateAnimation = useCallback(
