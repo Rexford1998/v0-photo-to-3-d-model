@@ -434,8 +434,8 @@ export default function Home() {
 
       setSavedModelUrl(payload.model_url)
       setSavedAnimationUrl(null)
-
-      await startRiggingForUploadedModel(publicUrl)
+      setIsUploadingModel(false)
+      void startRiggingForUploadedModel(publicUrl)
     } catch (uploadErr) {
       console.error("[v0] Model upload failed:", uploadErr)
       const message = uploadErr instanceof Error ? uploadErr.message : "Failed to upload model"
@@ -446,7 +446,7 @@ export default function Home() {
     }
   }
 
-  const isProcessing = stage === "generating" || stage === "rigging" || stage === "uploading" || isUploadingModel
+  const isGeneratingModel = stage === "generating" || stage === "rigging" || stage === "uploading"
   const showModel = (stage === "complete" && modelUrl) || uploadedPreviewUrl || uploadedModelUrl
   const displayModelUrl = uploadedPreviewUrl || uploadedModelUrl || modelUrl
   const displayAnimationUrl = uploadedModelUrl ? uploadedAnimationUrl : animationUrl
@@ -578,7 +578,7 @@ export default function Home() {
             <div className="space-y-4">
               <ImageUpload
                 onImageSelect={handleImageSelect}
-                disabled={isProcessing}
+                disabled={isGeneratingModel}
               />
 
               {selectedImage && (
@@ -606,11 +606,11 @@ export default function Home() {
               <div className="flex gap-3">
                 <Button
                   onClick={handleGenerate}
-                  disabled={!selectedImage || isProcessing}
+                  disabled={!selectedImage || isGeneratingModel}
                   className="flex-1 h-12 text-base font-medium"
                   size="lg"
                 >
-                  {isProcessing ? (
+                  {isGeneratingModel ? (
                     <>
                       <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground/20 border-t-primary-foreground" />
                       Processing...
@@ -623,7 +623,7 @@ export default function Home() {
                   )}
                 </Button>
 
-                {selectedImage && !isProcessing && (
+                {selectedImage && !isGeneratingModel && (
                   <Button
                     onClick={handleReset}
                     variant="outline"
@@ -639,12 +639,12 @@ export default function Home() {
               <div className="pt-4 border-t border-border">
                 <ModelUpload
                   onModelSelect={handleModelUpload}
-                  disabled={isProcessing}
+                  disabled={isGeneratingModel}
                 />
               </div>
             </div>
 
-            {isProcessing && (
+            {isGeneratingModel && (
               <div className="rounded-2xl border border-border bg-card p-6">
                 <ProgressSteps
                   steps={STEPS}
