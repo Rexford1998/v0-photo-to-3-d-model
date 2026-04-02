@@ -722,7 +722,15 @@ export default function Home() {
                   <Package className="h-4 w-4" />
                   <strong>Uploaded model loaded:</strong> Preview is ready{uploadedModelUrl ? " and the hosted copy is ready for multiplayer." : "."}
                 </div>
-                {user && uploadedPreviewUrl && !uploadedModelUrl && <p className="text-xs">Uploading to storage now. Multiplayer will unlock once the hosted URL is ready.</p>}
+                {user && isUploadingModel && !uploadedModelUrl && (
+                  <p className="text-xs">Uploading to storage now. Multiplayer unlocks as soon as the hosted copy finishes saving.</p>
+                )}
+                {user && !isUploadingModel && !uploadedModelUrl && !uploadError && (
+                  <p className="text-xs">The hosted copy is not ready yet. Try uploading again if this does not update.</p>
+                )}
+                {user && uploadedModelUrl && (
+                  <p className="text-xs">Hosted copy saved successfully. You can use this model in multiplayer now.</p>
+                )}
                 {!user && <p className="text-xs">Log in to save this uploaded model and generate animations.</p>}
               </div>
             )}
@@ -766,11 +774,7 @@ export default function Home() {
       </div>
 
       <footer className="border-t border-border bg-card py-6">
-        <div className="mx-auto max-w-6xl px-4 text-center text-sm text-muted-foreground">
-          <p>
-            3D models generated using Meshy AI. Note: Rigging requires Meshy API credits. Visit meshy.ai to add funds.
-          </p>
-        </div>
+        <div className="mx-auto max-w-6xl px-4 text-center text-sm text-muted-foreground" />
       </footer>
     </main>
   )
