@@ -75,28 +75,34 @@ export default function Home() {
       return
     }
 
-    const supabase = createClient()
-    const nickname = currentUser.email?.split("@")[0] || "Player"
-    const { data: playerData } = await supabase
-      .from("players")
-      .select("model_url, animation_url")
-      .eq("user_id", currentUser.id)
-      .maybeSingle()
+    try {
+      const supabase = createClient()
+      const nickname = currentUser.email?.split("@")[0] || "Player"
+      const { data: playerData } = await supabase
+        .from("players")
+        .select("model_url, animation_url")
+        .eq("user_id", currentUser.id)
+        .maybeSingle()
 
-    if (playerData) {
-      setSavedModelUrl(getSavableModelUrl(playerData.model_url || "") || playerData.model_url || null)
-      setSavedAnimationUrl(getSavableModelUrl(playerData.animation_url || "") || playerData.animation_url || null)
-      return
+      if (playerData) {
+        setSavedModelUrl(getSavableModelUrl(playerData.model_url || "") || playerData.model_url || null)
+        setSavedAnimationUrl(getSavableModelUrl(playerData.animation_url || "") || playerData.animation_url || null)
+        return
+      }
+
+      const { data: legacyPlayerData } = await supabase
+        .from("players")
+        .select("model_url, animation_url")
+        .eq("nickname", nickname)
+        .maybeSingle()
+
+      setSavedModelUrl(getSavableModelUrl(legacyPlayerData?.model_url || "") || legacyPlayerData?.model_url || null)
+      setSavedAnimationUrl(getSavableModelUrl(legacyPlayerData?.animation_url || "") || legacyPlayerData?.animation_url || null)
+    } catch (error) {
+      console.warn("[v0] Failed to load saved player assets:", error)
+      setSavedModelUrl(null)
+      setSavedAnimationUrl(null)
     }
-
-    const { data: legacyPlayerData } = await supabase
-      .from("players")
-      .select("model_url, animation_url")
-      .eq("nickname", nickname)
-      .maybeSingle()
-
-    setSavedModelUrl(getSavableModelUrl(legacyPlayerData?.model_url || "") || legacyPlayerData?.model_url || null)
-    setSavedAnimationUrl(getSavableModelUrl(legacyPlayerData?.animation_url || "") || legacyPlayerData?.animation_url || null)
   }
 
   const findExistingPlayerRecord = async (supabase: ReturnType<typeof createClient>, currentUser: SupabaseUser) => {
@@ -133,10 +139,17 @@ export default function Home() {
     const supabase = createClient()
     
     const checkUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      setUser(user)
-      await loadSavedPlayerAssets(user)
-      setIsLoadingUser(false)
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const currentUser = session?.user || null
+        setUser(currentUser)
+        void loadSavedPlayerAssets(currentUser)
+      } catch (error) {
+        console.warn("[v0] Failed to resolve auth session:", error)
+        setUser(null)
+      } finally {
+        setIsLoadingUser(false)
+      }
     }
     
     checkUser()
@@ -149,8 +162,9 @@ export default function Home() {
         setSavedAnimationUrl(null)
         lastGeneratedSyncKeyRef.current = null
       } else {
-        await loadSavedPlayerAssets(session.user)
+        void loadSavedPlayerAssets(session.user)
       }
+      setIsLoadingUser(false)
     })
     
     return () => subscription.unsubscribe()
