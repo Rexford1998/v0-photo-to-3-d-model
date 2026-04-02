@@ -4,7 +4,7 @@
 import { useSearchParams, useRouter } from "next/navigation"
 import { useState, useEffect, useMemo, useRef } from "react"
 import Link from "next/link"
-import { ArrowLeft, Send, Users, LogOut, Play, ChevronDown, ChevronUp, RotateCcw, Radio, Pause, Volume2, Mic, MicOff, Phone, PhoneOff } from "lucide-react"
+import { ArrowLeft, Send, Users, LogOut, Play, ChevronDown, ChevronUp, RotateCcw, Radio, Pause, Volume2, Mic, MicOff, Phone, PhoneOff, SlidersHorizontal } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -101,6 +101,7 @@ function WorldPageContent() {
   const [chatPanelOpen, setChatPanelOpen] = useState(false)
   const [radioPanelOpen, setRadioPanelOpen] = useState(false)
   const [voicePanelOpen, setVoicePanelOpen] = useState(false)
+  const [mobileControlsOpen, setMobileControlsOpen] = useState(false)
   const [activeAnimationUrl, setActiveAnimationUrl] = useState<string | null>(null)
   const [availableAnimations, setAvailableAnimations] = useState<string[]>([])
   const [currentAnimation, setCurrentAnimation] = useState("")
@@ -119,6 +120,9 @@ function WorldPageContent() {
         setChatPanelOpen(true)
         setRadioPanelOpen(true)
         setVoicePanelOpen(true)
+        setMobileControlsOpen(true)
+      } else {
+        setMobileControlsOpen(false)
       }
     }
 
@@ -472,7 +476,15 @@ function WorldPageContent() {
       </div>
 
       {/* UI Panel */}
-      <div className="w-full md:w-96 md:h-screen bg-card border-t md:border-t-0 md:border-l border-border flex flex-col max-h-[50vh] md:max-h-none">
+      <div
+        className={`w-full md:w-96 md:h-screen bg-card border-t md:border-t-0 md:border-l border-border flex flex-col max-h-[50vh] md:max-h-none ${
+          isMobile
+            ? mobileControlsOpen
+              ? "fixed inset-x-3 bottom-3 top-auto z-30 max-h-[70vh] rounded-2xl border shadow-2xl"
+              : "hidden"
+            : ""
+        }`}
+      >
         {/* Header */}
         <div className="p-4 border-b border-border space-y-4">
           <div className="flex items-center justify-between">
@@ -751,6 +763,23 @@ function WorldPageContent() {
           )}
         </div>
       </div>
+
+      {isMobile && (
+        <div className="fixed bottom-3 left-3 right-3 z-20 flex items-center justify-between gap-3 md:hidden">
+          <div className="rounded-full bg-background/90 px-4 py-2 text-xs text-muted-foreground shadow-lg backdrop-blur">
+            Tap left side to move. Drag right side to look.
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            className="rounded-full shadow-lg"
+            onClick={() => setMobileControlsOpen((open) => !open)}
+          >
+            <SlidersHorizontal className="mr-2 h-4 w-4" />
+            {mobileControlsOpen ? "Hide UI" : "Controls"}
+          </Button>
+        </div>
+      )}
     </main>
   )
 }

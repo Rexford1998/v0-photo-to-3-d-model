@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect, useRef, useState, useMemo } from "react"
-import { Canvas, useFrame } from "@react-three/fiber"
+import { Canvas, useFrame, useThree } from "@react-three/fiber"
 import { Html, PerspectiveCamera, useGLTF, useAnimations } from "@react-three/drei"
 import * as THREE from "three"
 import { SkeletonUtils } from "three-stdlib"
@@ -599,11 +599,16 @@ function BotCharacter() {
 // Main scene
 function Scene({ players, localPlayerId, modelUrl, originalModelUrl, onPositionChange }: { players: Player[]; localPlayerId: string | null; modelUrl: string; originalModelUrl: string; onPositionChange: (x: number, z: number, rotation: number) => void }) {
   const cameraRef = useRef<THREE.PerspectiveCamera>(null)
+  const { gl, camera } = useThree()
   const localPlayer = players.find((p) => p.id === localPlayerId)
   const keysPressed = useRef<{ [key: string]: boolean }>({})
   const positionRef = useRef({ x: localPlayer?.position_x || 0, z: localPlayer?.position_z || 0 })
   const rotationRef = useRef(localPlayer?.rotation_y || 0)
   const isMovingRef = useRef(false)
+  const tapMoveTargetRef = useRef<{ x: number; z: number } | null>(null)
+  const raycasterRef = useRef(new THREE.Raycaster())
+  const groundPlaneRef = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0))
+  const pointerVectorRef = useRef(new THREE.Vector2())
   const touchStateRef = useRef({
     lookActive: false,
     moveActive: false,
@@ -614,6 +619,7 @@ function Scene({ players, localPlayerId, modelUrl, originalModelUrl, onPositionC
     moveStartY: 0,
     moveCurrentX: 0,
     moveCurrentY: 0,
+    moveDistance: 0,
   })
 
   useEffect(() => {
@@ -665,6 +671,7 @@ function Scene({ players, localPlayerId, modelUrl, originalModelUrl, onPositionC
       touchState.moveStartY = 0
       touchState.moveCurrentX = 0
       touchState.moveCurrentY = 0
+      touchState.moveDistance = 0
     }
   }
 
@@ -682,6 +689,7 @@ function Scene({ players, localPlayerId, modelUrl, originalModelUrl, onPositionC
         touchState.moveStartY = event.clientY
         touchState.moveCurrentX = event.clientX
         touchState.moveCurrentY = event.clientY
+        touchState.moveDistance = 0
       } else if (!touchState.lookActive) {
         touchState.lookActive = true
         touchState.lookPointerId = event.pointerId
@@ -703,11 +711,44 @@ function Scene({ players, localPlayerId, modelUrl, originalModelUrl, onPositionC
       if (touchState.moveActive && event.pointerId === touchState.movePointerId) {
         touchState.moveCurrentX = event.clientX
         touchState.moveCurrentY = event.clientY
+        const moveDx = event.clientX - touchState.moveStartX
+        const moveDy = event.clientY - touchState.moveStartY
+        touchState.moveDistance = Math.max(touchState.moveDistance, Math.sqrt(moveDx * moveDx + moveDy * moveDy))
       }
     }
 
     const handlePointerEnd = (event: PointerEvent) => {
       if (event.pointerType !== "touch") return
+
+      const touchState = touchStateRef.current
+      const isTapMove =
+        touchState.movePointerId === event.pointerId &&
+        touchState.moveDistance < 14 &&
+        event.clientX <= window.innerWidth / 2
+
+      if (isTapMove) {
+        const canvasRect = gl.domElement.getBoundingClientRect()
+        if (
+          event.clientX >= canvasRect.left &&
+          event.clientX <= canvasRect.right &&
+          event.clientY >= canvasRect.top &&
+          event.clientY <= canvasRect.bottom
+        ) {
+          const normalizedX = ((event.clientX - canvasRect.left) / canvasRect.width) * 2 - 1
+          const normalizedY = -(((event.clientY - canvasRect.top) / canvasRect.height) * 2 - 1)
+          pointerVectorRef.current.set(normalizedX, normalizedY)
+          raycasterRef.current.setFromCamera(pointerVectorRef.current, camera)
+
+          const intersectionPoint = new THREE.Vector3()
+          if (raycasterRef.current.ray.intersectPlane(groundPlaneRef.current, intersectionPoint)) {
+            tapMoveTargetRef.current = {
+              x: THREE.MathUtils.clamp(intersectionPoint.x, -50, 50),
+              z: THREE.MathUtils.clamp(intersectionPoint.z, -50, 50),
+            }
+          }
+        }
+      }
+
       clearPointer(event.pointerId)
     }
 
@@ -722,7 +763,7 @@ function Scene({ players, localPlayerId, modelUrl, originalModelUrl, onPositionC
       window.removeEventListener("pointerup", handlePointerEnd)
       window.removeEventListener("pointercancel", handlePointerEnd)
     }
-  }, [])
+  }, [camera, gl])
 
   useFrame(() => {
     if (!localPlayer) return
@@ -753,15 +794,33 @@ function Scene({ players, localPlayerId, modelUrl, originalModelUrl, onPositionC
 
     const isRotating = keysPressed.current["arrowleft"] || keysPressed.current["arrowright"]
     const isTouchLooking = touchState.lookActive
+    const hasTapTarget = Boolean(tapMoveTargetRef.current)
+
+    if (Math.abs(forward) > 0 || isRotating || touchState.moveActive) {
+      tapMoveTargetRef.current = null
+    }
 
     // Track if player is moving for animation
-    isMovingRef.current = Math.abs(forward) > 0 || isRotating || isTouchLooking
+    isMovingRef.current = Math.abs(forward) > 0 || isRotating || isTouchLooking || hasTapTarget
 
     if (forward !== 0) {
       const moveX = Math.sin(rotationRef.current) * speed * forward
       const moveZ = Math.cos(rotationRef.current) * speed * forward
       positionRef.current.x += moveX
       positionRef.current.z += moveZ
+    } else if (tapMoveTargetRef.current) {
+      const dx = tapMoveTargetRef.current.x - positionRef.current.x
+      const dz = tapMoveTargetRef.current.z - positionRef.current.z
+      const distance = Math.sqrt(dx * dx + dz * dz)
+
+      if (distance < 0.2) {
+        tapMoveTargetRef.current = null
+      } else {
+        rotationRef.current = Math.atan2(dx, dz)
+        const step = Math.min(speed, distance)
+        positionRef.current.x += Math.sin(rotationRef.current) * step
+        positionRef.current.z += Math.cos(rotationRef.current) * step
+      }
     }
 
     // Clamp to world bounds
