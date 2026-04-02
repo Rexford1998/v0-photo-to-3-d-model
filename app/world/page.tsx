@@ -4,7 +4,7 @@
 import { useSearchParams, useRouter } from "next/navigation"
 import { useState, useEffect, useMemo, useRef } from "react"
 import Link from "next/link"
-import { ArrowLeft, Send, Users, LogOut, Play, ChevronDown, ChevronUp, RotateCcw, Radio, Pause, Volume2 } from "lucide-react"
+import { ArrowLeft, Send, Users, LogOut, Play, ChevronDown, ChevronUp, RotateCcw, Radio, Pause, Volume2, Mic, MicOff, Phone, PhoneOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -62,6 +62,7 @@ interface GeneratedAnimation {
   modelUrl: string
 }
 import { useMultiplayerWorld } from "@/hooks/useMultiplayerWorld"
+import { useVoiceChat } from "@/hooks/useVoiceChat"
 import { createClient } from "@/lib/supabase/client"
 import dynamic from "next/dynamic"
 
@@ -99,6 +100,7 @@ function WorldPageContent() {
   const [animationPanelOpen, setAnimationPanelOpen] = useState(false)
   const [chatPanelOpen, setChatPanelOpen] = useState(false)
   const [radioPanelOpen, setRadioPanelOpen] = useState(false)
+  const [voicePanelOpen, setVoicePanelOpen] = useState(false)
   const [activeAnimationUrl, setActiveAnimationUrl] = useState<string | null>(null)
   const [availableAnimations, setAvailableAnimations] = useState<string[]>([])
   const [currentAnimation, setCurrentAnimation] = useState("")
@@ -116,6 +118,7 @@ function WorldPageContent() {
       if (!mediaQuery.matches) {
         setChatPanelOpen(true)
         setRadioPanelOpen(true)
+        setVoicePanelOpen(true)
       }
     }
 
@@ -322,6 +325,19 @@ function WorldPageContent() {
     leaveWorld,
   } = useMultiplayerWorld(modelUrl || "", selectedCountry)
 
+  const {
+    isVoiceEnabled,
+    isMicMuted,
+    voiceError,
+    connectedPeerCount,
+    toggleVoice,
+    toggleMicMute,
+  } = useVoiceChat({
+    localPlayerId: playerId,
+    players,
+    country: joinedCountry || selectedCountry,
+  })
+
   if (!modelUrl) {
     return (
       <main className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -500,6 +516,57 @@ function WorldPageContent() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          )}
+        </div>
+
+        <div className="border-b border-border">
+          <button
+            onClick={() => setVoicePanelOpen((open) => !open)}
+            className="w-full p-4 flex items-center justify-between text-sm font-medium hover:bg-secondary/50 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <Mic className="h-4 w-4" />
+              Voice Chat
+            </div>
+            {voicePanelOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+
+          {voicePanelOpen && (
+            <div className="px-4 pb-4 space-y-3">
+              <div className="rounded-lg bg-secondary p-3 text-xs text-muted-foreground">
+                <div className="font-medium text-foreground">
+                  {isVoiceEnabled ? "Voice is live" : "Join the same-country voice room"}
+                </div>
+                <div>
+                  {connectedPeerCount > 0
+                    ? `Connected to ${connectedPeerCount} player${connectedPeerCount === 1 ? "" : "s"}.`
+                    : "Enable your microphone to talk with other players in this country."}
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button type="button" size="sm" onClick={toggleVoice} className="flex-1">
+                  {isVoiceEnabled ? <PhoneOff className="mr-2 h-4 w-4" /> : <Phone className="mr-2 h-4 w-4" />}
+                  {isVoiceEnabled ? "Leave Voice" : "Join Voice"}
+                </Button>
+
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={toggleMicMute}
+                  disabled={!isVoiceEnabled}
+                >
+                  {isMicMuted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                </Button>
+              </div>
+
+              {voiceError && (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700">
+                  {voiceError}
+                </div>
+              )}
             </div>
           )}
         </div>
