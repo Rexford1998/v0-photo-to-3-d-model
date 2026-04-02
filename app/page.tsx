@@ -8,6 +8,7 @@ import { ModelUpload } from "@/components/model-upload"
 import { AnimationGenerator } from "@/components/animation-generator"
 import { ProgressSteps } from "@/components/progress-steps"
 import { RigGuideEditor, type RigGuidePoints } from "@/components/rig-guide-editor"
+import { Progress } from "@/components/ui/progress"
 import { useMeshy } from "@/hooks/use-meshy"
 import { Button } from "@/components/ui/button"
 import { Sparkles, RotateCcw, Zap, Package, Play, Gamepad2, LogIn, UserPlus, LogOut, User } from "lucide-react"
@@ -52,6 +53,7 @@ export default function Home() {
   const [uploadedAnimationUrl, setUploadedAnimationUrl] = useState<string | null>(null)
   const [showRigGuideEditor, setShowRigGuideEditor] = useState(false)
   const [rigGuidePoints, setRigGuidePoints] = useState<RigGuidePoints>({})
+  const [uploadIndicatorProgress, setUploadIndicatorProgress] = useState(12)
   const lastGeneratedSyncKeyRef = useRef<string | null>(null)
   
   const {
@@ -234,6 +236,25 @@ export default function Home() {
     
     saveModel()
   }, [stage, modelUrl, animationUrl, rigTaskId, user])
+
+  useEffect(() => {
+    if (!isUploadingModel) {
+      setUploadIndicatorProgress(uploadedModelUrl ? 100 : 12)
+      return
+    }
+
+    setUploadIndicatorProgress(18)
+
+    const interval = window.setInterval(() => {
+      setUploadIndicatorProgress((current) => {
+        if (current >= 92) return current
+        const nextStep = current < 55 ? 9 : current < 78 ? 5 : 2
+        return Math.min(92, current + nextStep)
+      })
+    }, 900)
+
+    return () => window.clearInterval(interval)
+  }, [isUploadingModel, uploadedModelUrl])
 
   const handleLogout = async () => {
     const supabase = createClient()
@@ -723,7 +744,15 @@ export default function Home() {
                   <strong>Uploaded model loaded:</strong> Preview is ready{uploadedModelUrl ? " and the hosted copy is ready for multiplayer." : "."}
                 </div>
                 {user && isUploadingModel && !uploadedModelUrl && (
-                  <p className="text-xs">Uploading to storage now. Multiplayer unlocks as soon as the hosted copy finishes saving.</p>
+                  <>
+                    <div className="w-full max-w-sm space-y-1">
+                      <Progress value={uploadIndicatorProgress} className="h-2 bg-blue-200/60" />
+                      <p className="text-[11px] text-blue-700">
+                        Saving hosted copy: {uploadIndicatorProgress}% estimated
+                      </p>
+                    </div>
+                    <p className="text-xs">Uploading to storage now. Multiplayer unlocks as soon as the hosted copy finishes saving.</p>
+                  </>
                 )}
                 {user && !isUploadingModel && !uploadedModelUrl && !uploadError && (
                   <p className="text-xs">The hosted copy is not ready yet. Try uploading again if this does not update.</p>
