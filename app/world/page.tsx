@@ -76,9 +76,25 @@ function WorldPageContent() {
   const [chatInput, setChatInput] = useState("")
   const [generatedAnimations, setGeneratedAnimations] = useState<GeneratedAnimation[]>([])
   const [animationPanelOpen, setAnimationPanelOpen] = useState(false)
+  const [chatPanelOpen, setChatPanelOpen] = useState(false)
   const [activeAnimationUrl, setActiveAnimationUrl] = useState<string | null>(null)
   const [availableAnimations, setAvailableAnimations] = useState<string[]>([])
   const [currentAnimation, setCurrentAnimation] = useState("")
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 768px)")
+    const updateIsMobile = () => {
+      setIsMobile(mediaQuery.matches)
+      if (!mediaQuery.matches) {
+        setChatPanelOpen(true)
+      }
+    }
+
+    updateIsMobile()
+    mediaQuery.addEventListener("change", updateIsMobile)
+    return () => mediaQuery.removeEventListener("change", updateIsMobile)
+  }, [])
 
   useEffect(() => {
     const loadCountries = async () => {
@@ -319,9 +335,9 @@ function WorldPageContent() {
 
   // World view
   return (
-    <main className="min-h-screen bg-background flex">
+    <main className="min-h-screen bg-background flex flex-col md:flex-row">
       {/* 3D Canvas */}
-      <div className="flex-1">
+      <div className="flex-1 min-h-[50vh] md:min-h-screen">
         <Suspense fallback={<div className="flex items-center justify-center h-full w-full">Loading 3D world...</div>}>
           <WorldScene
             players={players}
@@ -334,7 +350,7 @@ function WorldPageContent() {
       </div>
 
       {/* UI Panel */}
-      <div className="w-96 h-screen bg-card border-l border-border flex flex-col">
+      <div className="w-full md:w-96 md:h-screen bg-card border-t md:border-t-0 md:border-l border-border flex flex-col max-h-[50vh] md:max-h-none">
         {/* Header */}
         <div className="p-4 border-b border-border space-y-4">
           <div className="flex items-center justify-between">
@@ -352,9 +368,12 @@ function WorldPageContent() {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Use Arrow Keys to move{joinedCountry ? ` • Location: ${joinedCountry}` : ""}
+            {isMobile ? "Left side moves, right side looks around" : "Use Arrow Keys to move"}
+            {joinedCountry ? ` • Location: ${joinedCountry}` : ""}
           </p>
-          <p className="text-xs text-muted-foreground">Use Arrow Keys to move</p>
+          <p className="text-xs text-muted-foreground">
+            {isMobile ? "Chat is tucked away below to save screen space on iPhone." : "Use Arrow Keys to move"}
+          </p>
           
           {/* Animation Selector */}
           {availableAnimations.length > 0 && (
@@ -435,7 +454,7 @@ function WorldPageContent() {
         )}
 
         {/* Players List */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+        <div className="flex-1 overflow-y-auto p-4 space-y-2 min-h-0">
           <div className="text-sm font-semibold mb-3">Players ({players.length})</div>
           {players.map((player) => (
             <div key={player.id} className="p-3 bg-secondary rounded-lg text-sm">
@@ -452,36 +471,51 @@ function WorldPageContent() {
         </div>
 
         {/* Chat */}
-        <div className="border-t border-border p-4 space-y-4">
-          <div className="h-40 bg-secondary rounded-lg overflow-y-auto p-3 space-y-2">
-            {chatMessages.map((msg) => (
-              <div key={msg.id} className="text-xs">
-                <span className="font-semibold text-primary">{msg.username}:</span>
-                <span className="text-muted-foreground ml-1">{msg.message}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex gap-2">
-            <Input
-              placeholder="Say something..."
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && chatInput.trim()) {
-                  handleSendMessage()
-                }
-              }}
-              className="text-sm"
-            />
-            <Button
-              size="sm"
-              onClick={handleSendMessage}
-              disabled={!chatInput.trim()}
-            >
+        <div className="border-t border-border">
+          <button
+            onClick={() => setChatPanelOpen((open) => !open)}
+            className="w-full p-4 flex items-center justify-between text-sm font-medium hover:bg-secondary/50 transition-colors"
+          >
+            <div className="flex items-center gap-2">
               <Send className="h-4 w-4" />
-            </Button>
-          </div>
+              Chat ({chatMessages.length})
+            </div>
+            {chatPanelOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+          </button>
+
+          {chatPanelOpen && (
+            <div className="p-4 pt-0 space-y-4">
+              <div className={`${isMobile ? "h-28" : "h-40"} bg-secondary rounded-lg overflow-y-auto p-3 space-y-2`}>
+                {chatMessages.map((msg) => (
+                  <div key={msg.id} className="text-xs">
+                    <span className="font-semibold text-primary">{msg.username}:</span>
+                    <span className="text-muted-foreground ml-1">{msg.message}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Say something..."
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && chatInput.trim()) {
+                      handleSendMessage()
+                    }
+                  }}
+                  className="text-sm"
+                />
+                <Button
+                  size="sm"
+                  onClick={handleSendMessage}
+                  disabled={!chatInput.trim()}
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </main>

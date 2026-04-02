@@ -601,10 +601,20 @@ function Scene({ players, localPlayerId, modelUrl, originalModelUrl, onPositionC
   const cameraRef = useRef<THREE.PerspectiveCamera>(null)
   const localPlayer = players.find((p) => p.id === localPlayerId)
   const keysPressed = useRef<{ [key: string]: boolean }>({})
-  const velocityRef = useRef({ x: 0, z: 0 })
   const positionRef = useRef({ x: localPlayer?.position_x || 0, z: localPlayer?.position_z || 0 })
   const rotationRef = useRef(localPlayer?.rotation_y || 0)
   const isMovingRef = useRef(false)
+  const touchStateRef = useRef({
+    lookActive: false,
+    moveActive: false,
+    lookPointerId: -1,
+    movePointerId: -1,
+    lastLookX: 0,
+    moveStartX: 0,
+    moveStartY: 0,
+    moveCurrentX: 0,
+    moveCurrentY: 0,
+  })
 
   useEffect(() => {
     const isTypingTarget = (target: EventTarget | null) => {
@@ -640,6 +650,80 @@ function Scene({ players, localPlayerId, modelUrl, originalModelUrl, onPositionC
     }
   }, [])
 
+  const clearPointer = (pointerId: number) => {
+    const touchState = touchStateRef.current
+
+    if (touchState.lookPointerId === pointerId) {
+      touchState.lookActive = false
+      touchState.lookPointerId = -1
+    }
+
+    if (touchState.movePointerId === pointerId) {
+      touchState.moveActive = false
+      touchState.movePointerId = -1
+      touchState.moveStartX = 0
+      touchState.moveStartY = 0
+      touchState.moveCurrentX = 0
+      touchState.moveCurrentY = 0
+    }
+  }
+
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.pointerType !== "touch") return
+
+      const touchState = touchStateRef.current
+      const halfWidth = window.innerWidth / 2
+
+      if (!touchState.moveActive && event.clientX <= halfWidth) {
+        touchState.moveActive = true
+        touchState.movePointerId = event.pointerId
+        touchState.moveStartX = event.clientX
+        touchState.moveStartY = event.clientY
+        touchState.moveCurrentX = event.clientX
+        touchState.moveCurrentY = event.clientY
+      } else if (!touchState.lookActive) {
+        touchState.lookActive = true
+        touchState.lookPointerId = event.pointerId
+        touchState.lastLookX = event.clientX
+      }
+    }
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (event.pointerType !== "touch") return
+
+      const touchState = touchStateRef.current
+
+      if (touchState.lookActive && event.pointerId === touchState.lookPointerId) {
+        const deltaX = event.clientX - touchState.lastLookX
+        rotationRef.current -= deltaX * 0.015
+        touchState.lastLookX = event.clientX
+      }
+
+      if (touchState.moveActive && event.pointerId === touchState.movePointerId) {
+        touchState.moveCurrentX = event.clientX
+        touchState.moveCurrentY = event.clientY
+      }
+    }
+
+    const handlePointerEnd = (event: PointerEvent) => {
+      if (event.pointerType !== "touch") return
+      clearPointer(event.pointerId)
+    }
+
+    window.addEventListener("pointerdown", handlePointerDown, { passive: true })
+    window.addEventListener("pointermove", handlePointerMove, { passive: true })
+    window.addEventListener("pointerup", handlePointerEnd)
+    window.addEventListener("pointercancel", handlePointerEnd)
+
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown)
+      window.removeEventListener("pointermove", handlePointerMove)
+      window.removeEventListener("pointerup", handlePointerEnd)
+      window.removeEventListener("pointercancel", handlePointerEnd)
+    }
+  }, [])
+
   useFrame(() => {
     if (!localPlayer) return
 
@@ -656,11 +740,22 @@ function Scene({ players, localPlayerId, modelUrl, originalModelUrl, onPositionC
     }
 
     // Handle movement (Up/Down arrow)
-    const forward = (keysPressed.current["arrowup"] ? 1 : 0) + (keysPressed.current["arrowdown"] ? -1 : 0)
+    let forward = (keysPressed.current["arrowup"] ? 1 : 0) + (keysPressed.current["arrowdown"] ? -1 : 0)
+
+    const touchState = touchStateRef.current
+    if (touchState.moveActive) {
+      const deltaY = touchState.moveStartY - touchState.moveCurrentY
+      const normalizedForward = THREE.MathUtils.clamp(deltaY / 80, -1, 1)
+      if (Math.abs(normalizedForward) > 0.12) {
+        forward = normalizedForward
+      }
+    }
+
     const isRotating = keysPressed.current["arrowleft"] || keysPressed.current["arrowright"]
+    const isTouchLooking = touchState.lookActive
 
     // Track if player is moving for animation
-    isMovingRef.current = forward !== 0 || isRotating
+    isMovingRef.current = Math.abs(forward) > 0 || isRotating || isTouchLooking
 
     if (forward !== 0) {
       const moveX = Math.sin(rotationRef.current) * speed * forward
@@ -741,7 +836,7 @@ interface WorldSceneProps {
 
 export default function WorldScene({ players, localPlayerId, modelUrl, originalModelUrl, onPositionChange }: WorldSceneProps) {
   return (
-    <div className="w-full h-screen">
+    <div className="w-full h-screen touch-none">
       <Canvas shadows>
         <Scene players={players} localPlayerId={localPlayerId} modelUrl={modelUrl} originalModelUrl={originalModelUrl} onPositionChange={onPositionChange} />
       </Canvas>
