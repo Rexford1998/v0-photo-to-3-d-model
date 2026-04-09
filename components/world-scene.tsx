@@ -2,9 +2,9 @@
 
 import React, { useEffect, useRef, useState, useMemo } from "react"
 import { Canvas, useFrame, useThree } from "@react-three/fiber"
-import { Html, PerspectiveCamera, useGLTF, useAnimations } from "@react-three/drei"
+import { Html, PerspectiveCamera, Sky, useGLTF, useAnimations } from "@react-three/drei"
 import * as THREE from "three"
-import { SkeletonUtils } from "three-stdlib"
+import { SkeletonUtils, Water } from "three-stdlib"
 
 interface Player {
   id: string
@@ -19,11 +19,13 @@ interface Player {
 }
 
 const BEACH_ASSET_URLS = {
-  oceanWater: "/models/beach/ocean.glb",
   palmTree: "/models/beach/palm-tree.glb",
   rock: "/models/beach/rock.glb",
   rockyPondOasis: "/models/beach/rocky-pond-oasis.glb",
 } as const
+
+const WATER_NORMALS_TEXTURE_URL = "/textures/waternormals.jpg"
+const SKY_SUN_POSITION: [number, number, number] = [20, 25, 15]
 
 function lerpAngle(current: number, target: number, alpha: number) {
   let delta = target - current
@@ -472,25 +474,47 @@ function pickBotTarget(origin?: { x: number; z: number }) {
 }
 
 function OceanWaterSurface() {
-  return (
-    <ErrorBoundaryModel
-      fallback={
-        <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, -1, 0]}>
-          <circleGeometry args={[35, 64]} />
-          <meshStandardMaterial color="#1E90FF" metalness={0.3} roughness={0.4} />
-        </mesh>
+  const water = useMemo(() => {
+    const waterNormals = new THREE.TextureLoader().load(WATER_NORMALS_TEXTURE_URL)
+    waterNormals.wrapS = THREE.RepeatWrapping
+    waterNormals.wrapT = THREE.RepeatWrapping
+
+    const waterGeometry = new THREE.CircleGeometry(35, 128)
+    const surface = new Water(waterGeometry, {
+      textureWidth: 1024,
+      textureHeight: 1024,
+      waterNormals,
+      sunDirection: new THREE.Vector3(0.4, 1, 0.2).normalize(),
+      sunColor: 0xfff4d9,
+      waterColor: 0x1e5f99,
+      distortionScale: 2.6,
+      fog: true,
+    })
+
+    surface.rotation.x = -Math.PI / 2
+    surface.position.set(0, -1, 0)
+    surface.receiveShadow = true
+
+    return surface
+  }, [])
+
+  useFrame((_, delta) => {
+    water.material.uniforms.time.value += delta * 0.75
+  })
+
+  useEffect(() => {
+    return () => {
+      const normalSampler = water.material.uniforms.normalSampler.value
+      if (normalSampler instanceof THREE.Texture) {
+        normalSampler.dispose()
       }
-    >
-      <React.Suspense fallback={null}>
-        <StaticBeachProp
-          url={BEACH_ASSET_URLS.oceanWater}
-          position={[0, -1, 0]}
-          targetSize={70}
-          hiddenMeshNames={["Sphere", "IMG_7930_b.jpg.000"]}
-        />
-      </React.Suspense>
-    </ErrorBoundaryModel>
-  )
+
+      water.geometry.dispose()
+      water.material.dispose()
+    }
+  }, [water])
+
+  return <primitive object={water} />
 }
 
 // Island environment component
@@ -881,12 +905,32 @@ function Scene({ players, localPlayerId, modelUrl, originalModelUrl, onPositionC
     <>
       {/* Warm tropical lighting */}
       <ambientLight intensity={0.7} color="#FFF8DC" />
-      <directionalLight position={[20, 25, 15]} intensity={1.4} castShadow shadow-mapSize={[2048, 2048]} color="#FFFACD" />
+      <hemisphereLight intensity={0.35} color="#dff0ff" groundColor="#d2b48c" />
+      <directionalLight position={SKY_SUN_POSITION} intensity={1.4} castShadow shadow-mapSize={[2048, 2048]} color="#FFFACD" />
       <pointLight position={[-15, 12, -15]} intensity={0.4} color="#FFE4B5" />
       <fogExp2 attach="fog" args={["#E0F6FF", 0.02]} />
 
-      {/* Ocean water surface */}
-      <OceanWaterSurface />
+      {/* Atmospheric sky */}
+      <Sky
+        distance={450000}
+        sunPosition={SKY_SUN_POSITION}
+        turbidity={8}
+        rayleigh={1.5}
+        mieCoefficient={0.004}
+        mieDirectionalG={0.8}
+      />
+
+      {/* Animated shader ocean */}
+      <ErrorBoundaryModel
+        fallback={
+          <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, -1, 0]}>
+            <circleGeometry args={[35, 64]} />
+            <meshStandardMaterial color="#1E90FF" metalness={0.3} roughness={0.4} />
+          </mesh>
+        }
+      >
+        <OceanWaterSurface />
+      </ErrorBoundaryModel>
 
       {/* Sandy ground/beach area */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, 0.01, 0]}>
@@ -908,9 +952,6 @@ function Scene({ players, localPlayerId, modelUrl, originalModelUrl, onPositionC
           <OtherPlayerCharacter key={player.id} player={player} />
         )
       ))}
-
-      {/* Bright tropical sky */}
-      <color attach="background" args={["#87CEEB"]} />
 
       {/* Camera */}
       <PerspectiveCamera ref={cameraRef} makeDefault position={[0, 2, 5]} fov={50} />
@@ -939,4 +980,3 @@ export default function WorldScene({ players, localPlayerId, modelUrl, originalM
 useGLTF.preload(BEACH_ASSET_URLS.palmTree)
 useGLTF.preload(BEACH_ASSET_URLS.rock)
 useGLTF.preload(BEACH_ASSET_URLS.rockyPondOasis)
-useGLTF.preload(BEACH_ASSET_URLS.oceanWater)
