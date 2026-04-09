@@ -19,7 +19,7 @@ interface Player {
 }
 
 const BEACH_ASSET_URLS = {
-  hyperRealisticBeach: "/models/beach/beach-scene.glb",
+  oceanWater: "/models/beach/ocean.glb",
   palmTree: "/models/beach/palm-tree.glb",
   rock: "/models/beach/rock.glb",
   rockyPondOasis: "/models/beach/rocky-pond-oasis.glb",
@@ -471,16 +471,22 @@ function pickBotTarget(origin?: { x: number; z: number }) {
   }
 }
 
-function HyperRealisticBeachTerrain() {
+function OceanWaterSurface() {
   return (
-    <ErrorBoundaryModel fallback={null}>
+    <ErrorBoundaryModel
+      fallback={
+        <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, -1, 0]}>
+          <circleGeometry args={[35, 64]} />
+          <meshStandardMaterial color="#1E90FF" metalness={0.3} roughness={0.4} />
+        </mesh>
+      }
+    >
       <React.Suspense fallback={null}>
         <StaticBeachProp
-          url={BEACH_ASSET_URLS.hyperRealisticBeach}
-          position={[0, 0, 0]}
+          url={BEACH_ASSET_URLS.oceanWater}
+          position={[0, -1, 0]}
           targetSize={70}
-          verticalOffset={-1}
-          hiddenMeshNames={["Sky"]}
+          hiddenMeshNames={["Sphere", "IMG_7930_b.jpg.000"]}
         />
       </React.Suspense>
     </ErrorBoundaryModel>
@@ -491,6 +497,18 @@ function HyperRealisticBeachTerrain() {
 function IslandEnvironment() {
   return (
     <group>
+      {/* Sandy beach base */}
+      <mesh castShadow receiveShadow position={[0, -0.5, 0]} scale={[8, 0.5, 8]}>
+        <cylinderGeometry args={[1, 1, 1, 32]} />
+        <meshStandardMaterial color="#F4A460" />
+      </mesh>
+
+      {/* Grassy center */}
+      <mesh castShadow receiveShadow position={[0, 0.01, 0]} scale={[4, 0.1, 4]}>
+        <cylinderGeometry args={[1, 1, 1, 32]} />
+        <meshStandardMaterial color="#7CB342" />
+      </mesh>
+
       <ErrorBoundaryModel fallback={null}>
         <React.Suspense fallback={null}>
           <BeachScenery />
@@ -867,8 +885,14 @@ function Scene({ players, localPlayerId, modelUrl, originalModelUrl, onPositionC
       <pointLight position={[-15, 12, -15]} intensity={0.4} color="#FFE4B5" />
       <fogExp2 attach="fog" args={["#E0F6FF", 0.02]} />
 
-      {/* Hyper-realistic beach terrain (replaces flat ocean + sand primitives) */}
-      <HyperRealisticBeachTerrain />
+      {/* Ocean water surface */}
+      <OceanWaterSurface />
+
+      {/* Sandy ground/beach area */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, 0.01, 0]}>
+        <circleGeometry args={[15, 32]} />
+        <meshStandardMaterial color="#EDC9AF" />
+      </mesh>
 
       {/* Tropical island environment */}
       <IslandEnvironment />
@@ -915,4 +939,4 @@ export default function WorldScene({ players, localPlayerId, modelUrl, originalM
 useGLTF.preload(BEACH_ASSET_URLS.palmTree)
 useGLTF.preload(BEACH_ASSET_URLS.rock)
 useGLTF.preload(BEACH_ASSET_URLS.rockyPondOasis)
-useGLTF.preload(BEACH_ASSET_URLS.hyperRealisticBeach)
+useGLTF.preload(BEACH_ASSET_URLS.oceanWater)
