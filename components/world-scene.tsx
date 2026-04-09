@@ -25,7 +25,9 @@ const BEACH_ASSET_URLS = {
 } as const
 
 const WATER_NORMALS_TEXTURE_URL = "/textures/waternormals.jpg"
-const SKY_SUN_POSITION: [number, number, number] = [20, 25, 15]
+const SKY_SUN_POSITION: [number, number, number] = [60, 35, -80]
+const SKY_FOG_COLOR = "#b7d5f0"
+const OCEAN_RADIUS = 220
 
 function lerpAngle(current: number, target: number, alpha: number) {
   let delta = target - current
@@ -479,7 +481,7 @@ function OceanWaterSurface() {
     waterNormals.wrapS = THREE.RepeatWrapping
     waterNormals.wrapT = THREE.RepeatWrapping
 
-    const waterGeometry = new THREE.CircleGeometry(35, 128)
+    const waterGeometry = new THREE.CircleGeometry(OCEAN_RADIUS, 256)
     const surface = new Water(waterGeometry, {
       textureWidth: 1024,
       textureHeight: 1024,
@@ -487,7 +489,7 @@ function OceanWaterSurface() {
       sunDirection: new THREE.Vector3(0.4, 1, 0.2).normalize(),
       sunColor: 0xfff4d9,
       waterColor: 0x1e5f99,
-      distortionScale: 2.6,
+      distortionScale: 2.2,
       fog: true,
     })
 
@@ -904,27 +906,30 @@ function Scene({ players, localPlayerId, modelUrl, originalModelUrl, onPositionC
   return (
     <>
       {/* Warm tropical lighting */}
-      <ambientLight intensity={0.7} color="#FFF8DC" />
-      <hemisphereLight intensity={0.35} color="#dff0ff" groundColor="#d2b48c" />
-      <directionalLight position={SKY_SUN_POSITION} intensity={1.4} castShadow shadow-mapSize={[2048, 2048]} color="#FFFACD" />
-      <pointLight position={[-15, 12, -15]} intensity={0.4} color="#FFE4B5" />
-      <fogExp2 attach="fog" args={["#E0F6FF", 0.02]} />
+      <ambientLight intensity={0.55} color="#fff4d8" />
+      <hemisphereLight intensity={0.3} color="#d7ebff" groundColor="#d2b48c" />
+      <directionalLight position={SKY_SUN_POSITION} intensity={1.2} castShadow shadow-mapSize={[2048, 2048]} color="#fff4d6" />
+      <pointLight position={[-15, 12, -15]} intensity={0.25} color="#ffe4b5" />
+      <fogExp2 attach="fog" args={[SKY_FOG_COLOR, 0.006]} />
+
+      {/* Ensure a blue fallback behind atmospheric scattering */}
+      <color attach="background" args={["#9fc8ef"]} />
 
       {/* Atmospheric sky */}
       <Sky
         distance={450000}
         sunPosition={SKY_SUN_POSITION}
-        turbidity={8}
-        rayleigh={1.5}
-        mieCoefficient={0.004}
-        mieDirectionalG={0.8}
+        turbidity={3.5}
+        rayleigh={2.4}
+        mieCoefficient={0.0012}
+        mieDirectionalG={0.72}
       />
 
       {/* Animated shader ocean */}
       <ErrorBoundaryModel
         fallback={
           <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, -1, 0]}>
-            <circleGeometry args={[35, 64]} />
+            <circleGeometry args={[OCEAN_RADIUS, 128]} />
             <meshStandardMaterial color="#1E90FF" metalness={0.3} roughness={0.4} />
           </mesh>
         }
